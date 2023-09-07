@@ -1,0 +1,35 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../app"
+		},
+		{
+			"path": "../bin"
+		},
+		{
+			"path": "../vue-material-dashboard-laravel-pro/laravel-json-api-pro"
+		},
+		{
+			"path": "../LineageShop"
+		},
+		{
+			"path": "../stable-ui/src"
+		},
+		{
+			"path": "../kitsu"
+		}
+	],
+	"settings": {
+		"githubPullRequests.ignoredPullRequestBranches": [
+			"master"
+		],
+		"[python]": {
+			"editor.defaultFormatter": "ms-python.python"
+		},
+		"python.formatting.provider": "none",
+		"mocha.subdirectory": "../app/src/store/modules"
+	}
+}
