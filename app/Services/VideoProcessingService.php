@@ -243,11 +243,13 @@ class VideoProcessingService
             $previewPath = sprintf('%s', rtrim(config('app.paths.preview'), '/'));
             $animationFile = preg_replace('/^(.*)\.' . $filename_ext . '$/', '$1_animated_preview.' . 'png', $videoJob->outfile);
 
+            $previewUrl = config('app.paths.preview_public');
+            $params['preview_url'] = $previewUrl;
             $params['preview_img'] = $previewFrames >= 1 ? sprintf("%s/%s", $previewPath, basename($previewFile)) : '';
             $params['preview_animation'] = $previewFrames > 1 ? sprintf("%s/%s", $previewPath, basename($animationFile)) : '';
             $params['limit_frames_amount'] = $previewFrames;
 
-            Log::info(sprintf("Setting paths for preview_img, preview_animation to path: %s / %s / %s", $params['preview_img'], $params['preview_animation'], $previewPath));
+            Log::info(sprintf("Setting paths for preview_img, preview_url, preview_animation to path: %s / %s / %s / %s", $params['preview_img'], $previewUrl, $params['preview_animation'], $previewPath));
         }
         return $params;
     }

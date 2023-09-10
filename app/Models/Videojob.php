@@ -460,5 +460,6 @@ class Videojob extends Model implements HasMedia
         $this->addMediaCollection('thumbnails')->withResponsiveImages()->acceptsMimeTypes(['image/jpeg', 'image/png'])->onlyKeepLatest(3);
         $this->addMediaCollection('original')->acceptsMimeTypes(['image/png', 'video/quicktime', 'video/webm', 'video/mp4', 'image/gif', 'image/webp', 'image/jpeg'])->onlyKeepLatest(3);
 
+
     }
 }

@@ -102,10 +102,12 @@ class VideojobController extends Controller
         $videoJob->outfile = preg_replace('/\.[^.]+$/', '.', basename($path)) . 'mp4';
         $videoJob->model_id = 1;
         $videoJob->mimetype = $mimeType;
+
         $videoJob->user_id = auth('api')->id();
         $videoJob->prompt = '';
         $videoJob->negative_prompt = '';
         $videoJob->status = 'pending';
+
         $videoJob->save();
         $videoJob->addMedia($path)->withResponsiveImages()->preservingOriginal()->toMediaCollection(Videojob::MEDIA_ORIGINAL);
         $videoJob->original_url = $videoJob->getMedia(Videojob::MEDIA_ORIGINAL)->first()->getFullUrl();
