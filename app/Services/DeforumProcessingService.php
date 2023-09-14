@@ -4,20 +4,12 @@ namespace App\Services;
 
 use App\Models\ModelFile;
 use App\Models\Videojob;
-use FFMpeg\FFProbe;
-use FFMpeg\Format\Video\X264;
-use FFMpeg\FFMpeg as FFMpegOg;
-use FFMpeg\FFProbe\DataMapping\Stream;
-use FFMpeg\Coordinate\Dimension;
-use FFMpeg\Coordinate\TimeCode;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
 
 class DeforumProcessingService
 {
-
-   
     public function parseJob(Videojob $videoJob, string $path)
     {
 
@@ -69,7 +61,7 @@ class DeforumProcessingService
         $isPreview = $previewFrames > 0;
 
         try {
-
+            
             $cmd = $this->buildCommandLine($videoJob, $videoJob->getOriginalVideoPath(), $videoJob->getFinishedVideoPath(), $previewFrames);
             $this->killProcess($videoJob->id);
             Log::info("Conversion {$videoJob->id}: Running {$cmd}");
@@ -77,7 +69,44 @@ class DeforumProcessingService
             $process->setTimeout(7200);
             try {
                 $time = time();
-                $process->mustRun();
+                $output = $process->mustRun();
+                // Parse the JSON output
+                $decoded_output = json_decode($output->getOutput(), true);
+                // Get the first job ID
+                $first_job_id = $decoded_output['job_ids'][0];
+
+                $running = true;
+                $client = new \GuzzleHttp\Client();
+
+                while ($running) {
+                // Using GuzzleHttp\Client to make an API request
+                    $response = $client->request('GET', 'http://192.168.2.100:7860/deforum_api/jobs/'.$first_job_id);
+                    $data = json_decode($response->getBody(), true);
+                    Log::info("Got response: {$response->getBody()}", ['data' => $data]);
+
+                    // Update database
+                    $videoJob->progress = $data['phase_progress'] * 100;
+                    $videoJob->job_time = $data['execution_time'];
+                    $videoJob->outfile = $data['outdir'].$data['timestring'].'.mp4';
+                    if ($data['phase'] ==='QUEUED' && $videoJob->status !== "approved") {
+                        $videoJob->status='approved';
+                        $videoJob->save();
+                    }
+                    if ($data['status'] === 'DONE') {
+                        $videoJob->save();
+                        $running = false;
+
+                    } elseif ($data['status'] !== 'ACCEPTED') {
+                        $videoJob->status = 'error';
+                        $videoJob->save();
+                        $running = false;
+
+                        throw new \Exception("Error in job: " . json_encode($data));
+
+                    }
+                    sleep(5);
+                }
+
                 $videoJob->refresh();
 
                 $elapsed = time() - $time;
@@ -87,6 +116,10 @@ class DeforumProcessingService
                     $videoJob->frame_count++;
 
                 Log::info("Finished in {" . (time() - $time) . "} seconds :  {$videoJob->frame_count} frames on " . round($videoJob->frame_count / $elapsed) . "  frames/s speed. {output} ", ['output' => $process->getOutput()]);
+                
+                if (is_file($videoJob->outfile)) {
+                    rename($videoJob->outfile, $videoJob->getFinishedVideoPath());
+                }
 
                 $videoJob->attachResults();
                 $videoJob->save();
@@ -100,7 +133,7 @@ class DeforumProcessingService
                 $videoJob->updateProgress(time() - $time, 100, 0)->save();
 
             } catch (ProcessFailedException $exception) {
-                Log::info('Error while making ' . ($isPreview ? "preview" : "finfal") . ' conversion for ' . $videoJob->filename, ['exception' => $exception->getMessage()]);
+                Log::info('Error while making ' . ($isPreview ? "preview" : "final") . ' conversion for ' . $videoJob->filename, ['exception' => $exception->getMessage()]);
                 $videoJob->status = "error";
                 $videoJob->save();
 
@@ -136,56 +169,36 @@ class DeforumProcessingService
     {
 
         $modelFile = ModelFile::find($videoJob->model_id);
-        $prompts = $this->applyPrompts($videoJob);
         $cmdString = '';
 
         $params = [
-            'width' => $videoJob->width,
-            'height' => $videoJob->height,
-            'cfg_scale' => $videoJob->cfg_scale,
-            'steps' => $videoJob->steps,
-            'denoising_strength' => $videoJob->denoising,
-            'prompt' => $videoJob->
-            'negative_prompt' => $prompts[1],
-            'seed' => $videoJob->seed,
-            'jobid' => $videoJob->id,
-            'fps' => (int) $videoJob->fps,
-            'model' => '"' . $modelFile->filename . '"',
-            'outfile' => $outFile
+            'modelFile' => $modelFile->filename,
+            'init_img' => $videoJob->getOriginalVideoPath(),
+            'json_settings_file' => '/www/api/scripts/zoom.json',
         ];
 
 
-        if (!empty($videoJob->controlnet)) {
-            $controlnetArgs = $this->generateControlnetParams((array) json_decode($videoJob->controlnet, true));
-            if (is_array($controlnetArgs))
-                $params += $controlnetArgs;
-        }
-        $newParams = json_encode($params);
-        if ($videoJob->generation_parameters != $newParams) {
-            Log::info('Making new version since generation params dont match:', [$newParams, $videoJob->generation_params]);
-            $cmdString .= sprintf('--overwrite ');
-        }
-
-        $videoJob->generation_parameters = $newParams;
+        $videoJob->generation_parameters = json_encode($params);
         $videoJob->revision = md5($videoJob->generation_parameters);
+
         $videoJob->save();
 
-        $params += $this->buildPreviewParameters($videoJob, $previewFrames);
+       // $params += $this->buildPreviewParameters($videoJob, $previewFrames);
 
 
         foreach ($params as $key => $val) {
-            if ($key == 'prompt' || $key == 'negative_prompt') {
+            if ($key == 'modelFile' || $key == 'negative_prompt') {
                 $cmdString .= sprintf("--%s=\"%s\" ", $key, $val);
             } else
                 $cmdString .= sprintf('--%s=%s ', $key, $val);
         }
 
-        $processor = config('app.paths.image_processor_path');
+        $processor = config('app.paths.deforum_processor_path');
 
         $cmdParts = [
             $processor,
-            $sourceFile,
             $cmdString,
+            '--start'
         ];
 
         return implode(' ', $cmdParts);

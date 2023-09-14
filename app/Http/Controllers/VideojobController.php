@@ -139,37 +139,19 @@ class VideojobController extends Controller
         // Validate the form data
         $request->validate([
             'modelId' => 'required|integer',
-            'cfgScale' => 'required|integer|between:2,10',
             'prompt' => 'required|string',
             'frameCount' => 'numeric|between:1,20',
-            'denoising' => 'required|numeric|between:0.1,1.0',
+            'preset' => 'required|string',
         ]);
-
-        $seed = $request->input('seed', -1);
-
-        if ((int) $seed <= 0) {
-            $seed = rand(1, 4294967295);
-        }
 
         $frameCount = $request->input('frameCount', 1);
 
         // Get the VideoJob record and update it with the form data
         $videoJob = Videojob::findOrFail($request->input('videoId'));
 
-        $controlnet = $request->input('controlnet', []);
-
-        if (!empty($controlnet)) {
-            $videoJob->controlnet = json_encode($controlnet);
-            Log::info("Got controlnet params: " . json_encode($controlnet), ['controlnet' => json_decode($videoJob->controlnet)]);
-
-        }
-
 
         $videoJob->model_id = $request->input('modelId');
-        $videoJob->cfg_scale = $request->input('cfgScale');
-        $videoJob->seed = $seed;
         $videoJob->prompt = trim($request->input('prompt'));
-        $videoJob->negative_prompt = trim($request->input('negative_prompt'));
         $videoJob->status = 'processing';
         $videoJob->progress = 5;
         $videoJob->job_time = 3;

@@ -6,6 +6,7 @@ use App\Jobs\ProcessVideoJob;
 use App\Jobs\ProcessDeforumJob;
 use Illuminate\Foundation\Application;
 use App\Services\VideoProcessingService;
+use App\Services\DeforumProcessingService;
 use App\Repositories\SupportRequestMessage\SupportRequestMessageRepository;
 use App\Repositories\SupportRequestMessage\SupportRequestMessageRepositoryInterface;
 use Illuminate\Support\ServiceProvider;
@@ -68,7 +69,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bindMethod([ProcessVideoJob::class, 'handle'], function (ProcessVideoJob $job, Application $app) {
             return $job->handle($app->make(VideoProcessingService::class));
         });
-        $this->app->bindMethod([ProcessDeforumJob::class, 'handle'], function (ProcessDeforum $job, Application $app) {
+        $this->app->bindMethod([ProcessDeforumJob::class, 'handle'], function (ProcessDeforumJob $job, Application $app) {
             return $job->handle($app->make(DeforumProcessingService::class));
         });
 

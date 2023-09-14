@@ -101,8 +101,10 @@ Route::prefix('v1')->middleware('auth:api')->group(function () {
 
 Route::post('/upload', [VideojobController::class, 'upload'])->middleware('api');
 Route::post('/submit', [VideojobController::class, 'submit'])->middleware('api');
+Route::post('/submitDeforum', [VideojobController::class, 'submitDeforum'])->middleware('api');
+
 Route::post('/cancelJob/{videoId}', [VideojobController::class, 'cancelJob'])->middleware('api');
-Route::post('/finalize', [VideojobController::class, 'finalize'])->middleware('api');
+Route::post('/finalizeDeforum', [VideojobController::class, 'finalizeDeforum'])->middleware('api');
 
 
 Route::get('/csrf-token', function () {

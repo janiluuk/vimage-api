@@ -159,7 +159,9 @@ return [
         'preview' => '/storage/app/preview',
         'processed_public' => env('APP_URL', 'http://localhost') . '/processed',
         'preview_public' => env('APP_URL', 'http://localhost') . '/preview',
-        'image_processor_path' => '/opt/bin/video2video.py'
+        'image_processor_path' => '/opt/bin/video2video.py',
+        'deforum_processor_path' => '/opt/bin/deforum.py'
+
     ],
     'processing' => [
         'default_prompt_suffix' => 'masterpiece, best quality, 8k',

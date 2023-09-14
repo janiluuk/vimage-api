@@ -46,17 +46,19 @@ class ProcessDeforumJob implements ShouldQueue
                 $this->videoJob->status = VideoJob::STATUS_APPROVED;
                 $this->videoJob->save();
             }
+            if ($this->videoJob->generator != 'deforum') {
+                $this->fail("not a deforum job (".$this->videoJob->generator.")");
+            }
             Log::info("Found existing process, aborting..");
-
             return;
         }
         if ($this->videoJob) {
             $videoJob = $this->videoJob;
             try {
                 $pids = false;
-                Log::info("Starting...");
+                Log::info("Starting deforum job for #" . $videoJob->id);
 
-                exec('ps aux | grep -i video2video | grep -i \"\-\-jobid=' . $videoJob->id . '\" | grep -v grep', $pids);
+                exec('ps aux | grep -i deforum.py | grep -i \"\-\-jobid=' . $videoJob->id . '\" | grep -v grep', $pids);
                 if (!empty($pids) && $videoJob->status == Videojob::STATUS_PROCESSING) {
                     $videoJob->status = VideoJob::STATUS_APPROVED;
                     $videoJob->save();
@@ -96,43 +98,6 @@ class ProcessDeforumJob implements ShouldQueue
                 $this->fail($e->getMessage());
             }
         }
-    }
-    public function failed(\Exception $exception)
-    {
-        if ($this->videoJob) {
-            $videoJob = $this->videoJob;
-    
-            Log::info("Job has failed with exception: " . $exception->getMessage() . " and has " .  $videoJob->retries . " prior"); 
-    
-            // Check if the job has exceeded the maximum number of retries
-            if ($videoJob->retries < self::MAX_RETRIES) {
-                // Increment the retries count
-                $videoJob->retries++;
-                
-                // Update the job status based on the type of conversion
-                if ($this->previewFrames == 0) {
-                    // For full conversion
-                    $videoJob->status = VideoJob::STATUS_APPROVED;
-                } else {
-                    // For preview image or preview video conversion
-                    $videoJob->status = VideoJob::STATUS_PROCESSING;
-                }
-    
-                // Save the updated job details
-                $videoJob->save();
-    
-                // Re-dispatch the job to the queue for re-processing
-                dispatch(new self($videoJob, $this->previewFrames));
-            } else {
-                // The job has exceeded the maximum number of retries, update the status to 'error'
-                $videoJob->status = VideoJob::STATUS_ERROR;
-                $videoJob->save();
-            }
-        }
-    }
-    public function retryUntil()
-    {
-        return now()->addDay();
     }
     
 }
