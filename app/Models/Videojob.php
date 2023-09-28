@@ -263,9 +263,9 @@ class Videojob extends Model implements HasMedia
                     $generationTime = $mediaItem->hasCustomProperty('generator') ? $mediaItem->getCustomProperty('generated_at') : 0;
 
                     if (empty($currentCollection) || $collection == 'original' || (!empty($currentCollection) && $generationTime > $currentCollection['generated_at'])) {
+                        Log::info("Overwriting with mediaitem", ['type' => $mediaType, 'properties' => $mediaItem ]);
                         $currentCollection = [
                             'generator' => $mediaItem->hasCustomProperty('generator') ? $mediaItem->getCustomProperty('generator') : "",
-
                             'generated_at' => $generationTime,
                             'url' => $mediaItem->getFullUrl(),
                             'images' => [
@@ -352,7 +352,7 @@ class Videojob extends Model implements HasMedia
 
     public function addAttachment($file, $type = self::MEDIA_TYPE_ANIMATION, $collection = 'preview', $generator = 'vid2vid')
     {
-        $this->addMedia($file)->withCustomProperties(['generator' => $generator, 'revision' => $this->revision, 'type' => $type, 'generated_at' => time(), 'generation_parameters' => $this->generation_parameters])->withResponsiveImages()->preservingOriginal()->toMediaCollection($collection);
+        $this->addMedia($file)->withCustomProperties(['generator' => $generator, 'revision' => $this->revision, 'type' => $type, 'generated_at' => time(), 'generation_parameters' => $this->generation_parameters])->withResponsiveImages()->toMediaCollection($collection);
         Log::info('Added file {file} to media collection {collection} Is has now {size} images.', ['collection' => $collection, 'file' => $file, 'revision' => $this->revision, 'size' => count($this->getMedia($collection))]);
     }
     public function findMediaByGenerationParameters($parameters = [])

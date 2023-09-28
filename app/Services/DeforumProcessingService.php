@@ -240,6 +240,7 @@ class DeforumProcessingService
         $modelFile = ModelFile::find($videoJob->model_id);
         $file = explode(" [", $modelFile->filename);
         $modelFilename = $file[0];
+        $prompts = $this->applyPrompts($videoJob);
 
         $cmdString = '';
         $json_settings=[];
@@ -250,11 +251,18 @@ class DeforumProcessingService
             'json_settings_file' => '/www/api/scripts/zoom.json',
         ];
         
-        $json_settings['prompts'] = '{ "0": "' . addslashes($videoJob->prompt) .  '" }';
+        $json_settings['prompts'] = '{ "0": "' . addslashes($prompts[0]) .  ' --neg ' . addslashes($prompts[1]) . '" }';
         $json_settings['checkpoint_schedule'] = '"0: (\"' . $modelFilename . '\"), 100: (\"' . $modelFilename . '\")"';   
         $json_settings['max_frames'] =  $previewFrames > 0 ? $previewFrames : (int)$videoJob->frame_count;
-        $json_settings['sd_model_hash'] = '"' . str_replace("]", "", $file[1]) . '"';
+        $json_settings['sd_model_hash'] = isset($file[1]) ? '"' . str_replace("]", "", $file[1]) . '"' : '""';
         $json_settings['sd_model_name'] = '"' .trim($file[0]) . '"';
+        $json_settings['positive_prompts'] = '"' . addslashes($prompts[0]) . '"';
+        $json_settings['negative_prompts'] = '"' . addslashes($prompts[1]) . '"';
+
+        $videoJob->generation_parameters = json_encode($params+$json_settings);
+        $videoJob->revision = md5($videoJob->generation_parameters);
+
+        $json_settings['skip_video_creation'] = $previewFrames > 0 ? '"true"' : '"false"';
 
         $json_param = '{';
         $comma = '';
@@ -264,7 +272,7 @@ class DeforumProcessingService
         }
         $json_param .="}";
 
-        $videoJob->generation_parameters = json_encode($params);
+        $videoJob->generation_parameters = json_encode($params+$json_settings);
         $videoJob->revision = md5($videoJob->generation_parameters);
 
         $videoJob->save();

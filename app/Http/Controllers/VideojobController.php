@@ -137,7 +137,6 @@ class VideojobController extends Controller
             return response()->json(['error' => 'Unauthenticated'], 401);
         }
 
-
         // Validate the form data
         $request->validate([
             'modelId' => 'required|integer',
@@ -145,17 +144,15 @@ class VideojobController extends Controller
             'frameCount' => 'numeric|between:1,20',
             'preset' => 'required|string',
             'length' => 'numeric|between:1,20',
-
         ]);
 
         $frameCount = $request->input('frameCount', 1);
-        $length = $request->input('length', 4);
         // Get the VideoJob record and update it with the form data
         $videoJob = Videojob::findOrFail($request->input('videoId'));
-
-
         $videoJob->model_id = $request->input('modelId');
         $videoJob->prompt = trim($request->input('prompt'));
+        $videoJob->negative_prompt = trim($request->input('negative_prompt', ''));
+
         $videoJob->status = 'processing';
         $videoJob->progress = 5;
         $seed = $request->input('seed', -1);
@@ -166,14 +163,12 @@ class VideojobController extends Controller
 
         $videoJob->fps = 24;
         $videoJob->generator='deforum';
-        $videoJob->length = $length;
-        $videoJob->frame_count = round($length*$videoJob->fps);
+        $videoJob->length = $request->input('length', 4);
+        $videoJob->frame_count = round($videoJob->length*$videoJob->fps);
         $videoJob->job_time = 3;
-        $videoJob->estimated_time_left = ($frameCount * 6) + 6;
+        $videoJob->estimated_time_left = ($videoJob->frame_count * 6) + 6;
         $videoJob->denoising = $request->input('denoising');
         $videoJob->queued_at = Carbon::now();
-    
-
         $videoJob->save();
         $queueName = $frameCount > 1 ? env('MEDIUM_PRIORITY_QUEUE') : env('HIGH_PRIORITY_QUEUE');
         Log::info("Dispatching job with framecount {$frameCount} to queue {$queueName}");
@@ -235,6 +230,9 @@ class VideojobController extends Controller
 
 
         $videoJob->model_id = $request->input('modelId');
+        $videoJob->prompt = trim($request->input('prompt'));
+        $videoJob->negative_prompt = trim($request->input('negative_prompt'));
+
         $videoJob->cfg_scale = $request->input('cfgScale');
         $videoJob->seed = $seed;
     
@@ -276,6 +274,14 @@ class VideojobController extends Controller
             // Handle error, user is not authenticated
             return response()->json(['error' => 'Unauthenticated'], 401);
         }
+        // Validate the form data
+        $request->validate([
+            'modelId' => 'integer',
+            'prompt' => 'string',
+            'preset' => 'string',
+            'length' => 'numeric|between:1,20',
+
+        ]);
 
         $videoJob = Videojob::findOrFail($request->input('videoId'));
         $videoJob->resetProgress('approved');
@@ -283,7 +289,11 @@ class VideojobController extends Controller
         $videoJob->fps = 24;
         $videoJob->frame_count = round($length * $videoJob->fps);
 
-        $videoJob->length = $length;
+
+        $videoJob->model_id = $request->input('modelId', $videoJob->model_id);
+        $videoJob->prompt = trim($request->input('prompt', $videoJob->prompt));
+        $videoJob->negative_prompt = trim($request->input('negative_prompt', $videoJob->negative_prompt));
+        $videoJob->length =  $request->input('length', $videoJob->length);
         $videoJob->save();
 
         $videoJob->refresh();
