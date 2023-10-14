@@ -30,7 +30,6 @@ class AuthController extends ApiController
     ): JsonResponse {
         $response = $addUserAction
             ->execute(new AddUserRequest(
-                $request->login,
                 $request->email,
                 $request->password,
                 $request->license,

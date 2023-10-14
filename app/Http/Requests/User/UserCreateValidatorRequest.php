@@ -9,7 +9,7 @@ class UserCreateValidatorRequest extends ApiFormRequest
     public function rules(): array
     {
         return [
-            'login' => 'required|min:3|unique:users',
+//            'login' => 'required|min:3|unique:users',
             'email' => 'required|email|unique:users',
             'password' => 'required|min:8|confirmed',
             'license' => 'bool',

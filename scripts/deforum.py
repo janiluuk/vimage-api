@@ -49,28 +49,35 @@ class DeforumController():
         if self.args.show_job:
             res = self.get_deforum_job(args.show_job)
             print(json.dumps(res, indent=2))             
+        if self.args.jobid:
+            self.settings["id"] = self.args.jobid
         self.settings["init_images"] = False if self.args.init_img is None else ''
 
         self.settings["use_init"] = None if self.args.init_img is None else True
         self.settings["init_image"] = None if self.args.init_img is None else self.args.init_img
+
         self.settings["animation_prompts_negative"] = "" if self.args.negative_prompts is None else self.args.negative_prompts
         self.settings["seed"] = -1 if self.args.seed is None else self.args.seed
         self.settings["sampler"] = "Euler a" if self.args.sampler is None else self.args.sampler
         # Strength might be a different key in deforum
         self.settings["strength"] = 0.4 if self.args.strength is None else self.args.strength
-        self.settings["fps"] = 25 if self.args.strength is None else self.args.strength
+        self.settings["fps"] = 25 if self.args.fps is None else self.args.fps
         self.settings["steps"] = 20 if self.args.steps is None else self.args.steps
         self.settings["animation_mode"] = "2D" if self.args.animation_mode is None else self.args.animation_mode
         self.settings["max_frames"] = 100 if self.args.max_frames is None else self.args.max_frames
         # Get the output W and H based on input img.
+        if self.args.json_settings_file:
+            self.load_settings_from_file(self.args.json_settings_file)
+
         self.parse_image()
+        self.parse_prompts()
+
         #Print all argumanets to terminal
         if self.args.display:
             self.display_results(args.display)
             exit(0)
         # Start the job via defourm api.
         if self.args.start:
-            print("Starting job")
             self.start_job()
             exit(0)    
 
@@ -92,7 +99,9 @@ class DeforumController():
                     width, height = img.size
                     self.settings["W"] = width
                     self.settings["H"] = height
-                    self.encode_image_to_base64()
+                    self.settings["init_image"] = image_path
+
+#                    self.encode_image_to_base64()
             except Exception as e:
                 print("Error while getting image dimensions:", e)
 
@@ -101,8 +110,7 @@ class DeforumController():
             with open(file_path, 'r') as file:
                 loaded_settings = json.load(file)
                 for key, value in loaded_settings.items():
-                    if key not in self.settings:
-                        self.settings[key] = value
+                    self.settings[key] = value
         except Exception as e:
             print("Error while loading settings from file:", e)
     
@@ -157,9 +165,10 @@ class DeforumController():
         """
         payload = {"deforum_settings": self.settings}
         res = requests.post(url=f'{self.url}/deforum_api/batches', json=payload)
-        json.dumps(res.json(), indent=4)
+        formatted_res = json.dumps(res.json(), indent=4)
+        print(formatted_res)
         if res.status_code == 202:
-            print("Job added to the queue!")
+            res.status_code = 202
         else:
             print("Failed to add job to queue:{0}".format(res.text))
             exit(1)
@@ -227,7 +236,6 @@ class DeforumController():
 
         for job in res.json():
             for key in job:
-                r[job]['deforum_settings'] = ''
                 print(r[job])
                 
         exit(0)
@@ -238,7 +246,8 @@ parser.add_argument('--host', type=str, help="Hostname to connect to")
 parser.add_argument('--port', type=int, default=7860, help="Port to connect to")
 
 parser.add_argument('--json_settings', type=str, help="JSON string to overwrite default settings.")
-
+parser.add_argument('--json_settings_file', type=str, help="JSON File to read settings from.")
+parser.add_argument('--jobid', type=str, help="JOB id reference")
 parser.add_argument('--show', type=str, help="Show resulting key from settings. e.g. 'steps'")
 parser.add_argument('--init_img', type=str, help="The path for input image")
 parser.add_argument("--negative_prompts", type=str, help="Negative prompt keywords")
@@ -259,7 +268,6 @@ args = parser.parse_args()
 
 if len( sys.argv ) < 2:
     parser.print_help(sys.stderr)    
-
 deforum = DeforumController(args)
 
 
