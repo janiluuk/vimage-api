@@ -107,8 +107,8 @@ class VideojobController extends Controller
         $videoJob->seed = -1;
         $videoJob->frame_count = 90;
         $videoJob->user_id = auth('api')->id();
-        $videoJob->prompt = '';
-        $videoJob->negative_prompt = '';
+        $videoJob->prompt = 'skull face, Halloween, (sharp teeth:1.4), (mouth open:1.3), (dark skin:1.2), scull, night, dim light, darkness, looking to the viewer, eyes looking straight,  <lora:LowRA:0.3> <lora:more_details:0.5>';
+        $videoJob->negative_prompt = 'bad-picture-chill-75v';
         $videoJob->status = 'pending';
         $videoJob->save();
         $videoJob->addMedia($path)->withResponsiveImages()->preservingOriginal()->toMediaCollection(Videojob::MEDIA_ORIGINAL);

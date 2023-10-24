@@ -40,6 +40,7 @@ class DeforumProcessingService
 
         if ($width == $height && $width >= $max_dimension) {
             return [960, 960];
+
         } else if ($width > $height) {
             while ($width > $max_dimension) {
                 $height = ($height * $max_dimension) / $width;
