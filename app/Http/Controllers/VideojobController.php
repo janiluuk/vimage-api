@@ -53,7 +53,6 @@ class VideojobController extends Controller
         $mimeType = $uploadedFile->getMimeType();
 
         $path = $request->file('attachment')->store('videos', 'public');
-   
 
         $uploadedFile->move(public_path('videos'), basename($path));
         // Store the image file
@@ -93,10 +92,7 @@ class VideojobController extends Controller
     {
         $uploadedFile = $request->file('attachment');
         $mimeType = $uploadedFile->getMimeType();
-
         $path = $request->file('attachment')->store('videos', 'public');
-   
-
         $uploadedFile->move(public_path('videos'), basename($path));
         
         // Create a new VideoJob record
@@ -114,7 +110,6 @@ class VideojobController extends Controller
         $videoJob->prompt = '';
         $videoJob->negative_prompt = '';
         $videoJob->status = 'pending';
-
         $videoJob->save();
         $videoJob->addMedia($path)->withResponsiveImages()->preservingOriginal()->toMediaCollection(Videojob::MEDIA_ORIGINAL);
         $videoJob->original_url = $videoJob->getMedia(Videojob::MEDIA_ORIGINAL)->first()->getFullUrl();
@@ -199,7 +194,6 @@ class VideojobController extends Controller
             return response()->json(['error' => 'Unauthenticated'], 401);
         }
 
-
         // Validate the form data
         $request->validate([
             'modelId' => 'required|integer',
@@ -228,14 +222,11 @@ class VideojobController extends Controller
 
         }
 
-
         $videoJob->model_id = $request->input('modelId');
         $videoJob->prompt = trim($request->input('prompt'));
         $videoJob->negative_prompt = trim($request->input('negative_prompt'));
-
         $videoJob->cfg_scale = $request->input('cfgScale');
         $videoJob->seed = $seed;
-    
         $videoJob->prompt = trim($request->input('prompt'));
         $videoJob->negative_prompt = trim($request->input('negative_prompt'));
         $videoJob->status = 'processing';
@@ -282,18 +273,22 @@ class VideojobController extends Controller
             'length' => 'numeric|between:1,20',
 
         ]);
+        
+        $seed = $request->input('seed', -1);
+
+        if ((int) $seed <= 0) {
+            $seed = rand(1, 4294967295);
+        }
 
         $videoJob = Videojob::findOrFail($request->input('videoId'));
         $videoJob->resetProgress('approved');
-        $length = $request->input('length', 4);
         $videoJob->fps = 24;
-        $videoJob->frame_count = round($length * $videoJob->fps);
-
-
+        $videoJob->seed = $seed;
         $videoJob->model_id = $request->input('modelId', $videoJob->model_id);
         $videoJob->prompt = trim($request->input('prompt', $videoJob->prompt));
         $videoJob->negative_prompt = trim($request->input('negative_prompt', $videoJob->negative_prompt));
         $videoJob->length =  $request->input('length', $videoJob->length);
+        $videoJob->frame_count = round($videoJob->length * $videoJob->fps);
         $videoJob->save();
 
         $videoJob->refresh();

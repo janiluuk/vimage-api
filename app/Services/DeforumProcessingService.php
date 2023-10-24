@@ -39,7 +39,7 @@ class DeforumProcessingService
         $height = $videoJob->height;
 
         if ($width == $height && $width >= $max_dimension) {
-            return [500, 500];
+            return [960, 960];
         } else if ($width > $height) {
             while ($width > $max_dimension) {
                 $height = ($height * $max_dimension) / $width;
@@ -80,7 +80,8 @@ class DeforumProcessingService
                 }
 
                 $first_job_id = $decoded_output['job_ids'][0];
-
+                $videoJob->job_id = $first_job_id;
+                $videoJob->save();
                 $running = true;
                 $client = new \GuzzleHttp\Client();
                 $execution_times = [];
@@ -103,8 +104,6 @@ class DeforumProcessingService
                         
                     }
                     // Initialize arrays to hold last n values of execution_time and phase_progress
-
-
                    
                     // Update database
                     if ($data['phase'] == 'GENERATING') {
@@ -145,7 +144,7 @@ class DeforumProcessingService
                     if ($data['status'] === 'SUCCEEDED' && $data['phase'] == 'DONE') {
                         $sourceFile = implode("/", [$data['outdir'],  $data['timestring'] . '.mp4']);
                         $sourceAnimation = implode("/", [$data['outdir'],  $data['timestring'] . '.gif']);
-                        $previewPic = implode("/", [$data['outdir'],  $data['timestring'] . '_00000005.png']);
+                        $previewPic = implode("/", [$data['outdir'],  $data['timestring'] . '_000000005.png']);
 
                         if (is_file($sourceFile) && $previewFrames == 0 ) {
                             $videoJob->outfile = basename($sourceFile);
@@ -215,23 +214,6 @@ class DeforumProcessingService
 
         }
     }
-    private function buildPreviewParameters(VideoJob $videoJob, $previewFrames = 0): array
-    {
-        $params = [];
-        if ($previewFrames > 0) {
-            $filename_ext = pathinfo($videoJob->outfile, PATHINFO_EXTENSION);
-            $previewFile = preg_replace('/^(.*)\.' . $filename_ext . '$/', '$1_preview.' . 'png', $videoJob->outfile);
-            $previewPath = sprintf('%s', rtrim(config('app.paths.preview'), '/'));
-            $animationFile = preg_replace('/^(.*)\.' . $filename_ext . '$/', '$1_animated_preview.' . 'png', $videoJob->outfile);
-
-            $params['preview_img'] = $previewFrames >= 1 ? sprintf("%s/%s", $previewPath, basename($previewFile)) : '';
-            $params['preview_animation'] = $previewFrames > 1 ? sprintf("%s/%s", $previewPath, basename($animationFile)) : '';
-            $params['limit_frames_amount'] = $previewFrames;
-
-            Log::info(sprintf("Setting paths for preview_img, preview_animation to path: %s / %s / %s", $params['preview_img'], $params['preview_animation'], $previewPath));
-        }
-        return $params;
-    }
 
     private function buildCommandLine(VideoJob $videoJob, $sourceFile, $outFile, $previewFrames = 0)
     {
@@ -258,11 +240,14 @@ class DeforumProcessingService
         $json_settings['sd_model_name'] = '"' .trim($file[0]) . '"';
         $json_settings['positive_prompts'] = '"' . addslashes($prompts[0]) . '"';
         $json_settings['negative_prompts'] = '"' . addslashes($prompts[1]) . '"';
+        $json_settings['W'] = $videoJob->width > 0 ? $videoJob->width : 540;
+        $json_settings['H'] = $videoJob->height > 0 ? $videoJob->height : 960;
+
 
         $videoJob->generation_parameters = json_encode($params+$json_settings);
         $videoJob->revision = md5($videoJob->generation_parameters);
 
-        $json_settings['skip_video_creation'] = $previewFrames > 0 ? '"true"' : '"false"';
+        //$json_settings['skip_video_creation'] = $previewFrames > 0 ? 'true' : 'false';
 
         $json_param = '{';
         $comma = '';
@@ -272,13 +257,7 @@ class DeforumProcessingService
         }
         $json_param .="}";
 
-        $videoJob->generation_parameters = json_encode($params+$json_settings);
-        $videoJob->revision = md5($videoJob->generation_parameters);
-
         $videoJob->save();
-
-        // $params += $this->buildPreviewParameters($videoJob, $previewFrames);
-
 
         foreach ($params as $key => $val) {
             if ($key == 'modelFile') {
@@ -332,6 +311,7 @@ class DeforumProcessingService
      */
     public function killProcess($sessionId)
     {
+
         try {
             $pids = false;
 
