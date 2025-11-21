@@ -5,7 +5,7 @@ Laravel 10 API that powers uploads, video production, AI studio experiences for 
 ## What’s inside
 
 - JWT-authenticated APIs with social login and password recovery.
-- Video workflows for vid2vid and Deforum: upload media, submit parameters, extend a run, finalize, and track progress (with optional soundtrack uploads for finished videos).
+- Video workflows for vid2vid and Deforum: upload media, submit parameters, extend a run, finalize, track progress (with optional soundtrack uploads for finished videos), and inspect queue placement and live processing stats.
 - Catalog and GPU resource credit primitives (categories, products, orders, wallets, finance operations).
 - Administration endpoints for user management, finance operations, support requests, and content oversight.
 - AI studio flows centered on ingesting existing media and combining it with generated assets to deliver publish-ready content.
@@ -54,6 +54,8 @@ API v2 mirrors these at `/api/v2/*` plus `/api/v2/me`.
 - `POST /api/cancelJob/{videoId}` — cancel a pending or processing job and reset progress.
 - `GET /status/{videoId}` — check job status, progress, queue snapshot, and full generation parameters for a single job.
 - `GET /api/queue` — list all jobs for the authenticated user (their personal queue view, including status and progress).
+- `GET /api/video-jobs/processing/status` — live overview of in-flight jobs (processing + queue) and global counts.
+- `GET /api/video-jobs/processing/queue` — normalized queue feed for the authenticated user including placement and ETA.
 ### GPU resource credits & messaging
 
 - Categories and GPU credit products: `GET /api/categories`, `GET /api/categories/{id}`, `GET /api/products`, `GET /api/products/{productId}`,
@@ -78,3 +80,7 @@ Routes under `/api/administration` are protected by `AuthorizationChecker` and `
 
 Xdebug is available in the Docker environment; point your IDE to the running container and use `php artisan tinker` for quick
 REPL-style checks.
+
+## DeforumationQT web console
+
+- Visit `/deforumation-qt` to use the JavaScript port of DeforumationQT. Paste your JWT token, steer deforum payloads via `/api/generate`, and monitor processing/queue status in real time using the new endpoints above.

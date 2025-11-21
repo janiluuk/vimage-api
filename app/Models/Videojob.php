@@ -487,10 +487,17 @@ class Videojob extends Model implements HasMedia
         $info['total_jobs_in_queue'] = DB::table('video_jobs')->where('status', 'approved')->count();
 
         $modelId = $this->model_id;
+        $queuedAt = $this->queued_at ?? now()->timestamp;
         $info['your_position'] = DB::table('video_jobs')
             ->where('status', 'approved')
-            ->where('queued_at', $this->queued_at)
-            ->count()+1;
+            ->where(function ($query) use ($queuedAt) {
+                $query->where('queued_at', '<', $queuedAt)
+                    ->orWhere(function ($nested) use ($queuedAt) {
+                        $nested->where('queued_at', $queuedAt)
+                            ->where('id', '<=', $this->id);
+                    });
+            })
+            ->count();
 
         // Calculate the average time per frame for previous jobs with the same model
         $previousJobs = DB::table('video_jobs')

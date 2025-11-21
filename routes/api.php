@@ -104,6 +104,10 @@ Route::post('/generate', [VideojobController::class, 'generate'])->middleware('a
 Route::post('/finalize', [VideojobController::class, 'finalize'])->middleware('api');
 Route::post('/cancelJob/{videoId}', [VideojobController::class, 'cancelJob'])->middleware('api');
 Route::get('/queue', [VideojobController::class, 'getVideoJobs'])->middleware('auth:api');
+Route::middleware('auth:api')->prefix('video-jobs')->group(function () {
+    Route::get('/processing/status', [VideojobController::class, 'processingStatus']);
+    Route::get('/processing/queue', [VideojobController::class, 'processingQueue']);
+});
 
 Route::get('/csrf-token', function () {
     return response()->json([

@@ -203,14 +203,14 @@ public function test_status_includes_queue_snapshot_for_approved_job(): void
         $response->assertOk();
 
         $response->assertJson(fn ($json) => $json
-            ->where('status', Videojob::STATUS_APPROVED)
-            ->where('queued_at', Carbon::now()->timestamp)
-            ->has('queue', fn ($queue) => $queue
-                ->where('total_jobs_processing', 1)
-                ->where('total_jobs_in_queue', 2)
-                ->where('your_position', 2)
-                ->where('your_estimated_time', 50)
-                ->etc()
+                ->where('status', Videojob::STATUS_APPROVED)
+                ->where('queued_at', Carbon::now()->timestamp)
+                ->has('queue', fn ($queue) => $queue
+                    ->where('total_jobs_processing', 1)
+                    ->where('total_jobs_in_queue', 2)
+                ->where('your_position', 1)
+                    ->where('your_estimated_time', 50)
+                    ->etc()
             )
             ->etc()
         );
@@ -234,5 +234,74 @@ public function test_status_includes_queue_snapshot_for_approved_job(): void
         $response->assertStatus(403)->assertJson([
             'error' => 'Unauthorized. Not your video.',
         ]);
+    }
+
+    public function test_processing_status_endpoint_exposes_counts_and_user_jobs(): void
+    {
+        Carbon::setTestNow('2024-03-01 10:00:00');
+
+        $user = User::factory()->create();
+        $processingJob = Videojob::factory()->for($user, 'user')->create([
+            'status' => Videojob::STATUS_PROCESSING,
+            'progress' => 25,
+            'queued_at' => Carbon::now()->timestamp,
+        ]);
+        $queuedJob = Videojob::factory()->for($user, 'user')->create([
+            'status' => Videojob::STATUS_APPROVED,
+            'queued_at' => Carbon::now()->addMinute()->timestamp,
+            'frame_count' => 12,
+        ]);
+
+        Videojob::factory()->create(['status' => Videojob::STATUS_PROCESSING]);
+        Videojob::factory()->create(['status' => Videojob::STATUS_APPROVED]);
+
+        $this->actingAs($user, 'api');
+
+        $response = $this->getJson('/api/video-jobs/processing/status');
+
+        $response->assertOk()
+            ->assertJsonPath('counts.processing', 2)
+            ->assertJsonPath('counts.queued', 2)
+            ->assertJsonCount(1, 'processing')
+            ->assertJsonCount(1, 'queue');
+
+        $response->assertJsonFragment(['id' => $processingJob->id]);
+        $response->assertJsonFragment(['id' => $queuedJob->id]);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_processing_queue_endpoint_returns_queue_details_for_user(): void
+    {
+        Carbon::setTestNow('2024-04-01 09:00:00');
+
+        $user = User::factory()->create();
+        $queuedJob = Videojob::factory()->for($user, 'user')->create([
+            'status' => Videojob::STATUS_APPROVED,
+            'queued_at' => Carbon::now()->timestamp,
+            'frame_count' => 8,
+        ]);
+        $processingJob = Videojob::factory()->for($user, 'user')->create([
+            'status' => Videojob::STATUS_PROCESSING,
+            'progress' => 60,
+            'queued_at' => Carbon::now()->subMinutes(5)->timestamp,
+        ]);
+
+        Videojob::factory()->create(['status' => Videojob::STATUS_APPROVED]);
+
+        $this->actingAs($user, 'api');
+
+        $response = $this->getJson('/api/video-jobs/processing/queue');
+
+        $response->assertOk();
+        $response->assertJsonCount(2);
+        $response->assertJsonFragment(['id' => $queuedJob->id]);
+        $response->assertJsonFragment(['id' => $processingJob->id]);
+
+        $payload = collect($response->json())->firstWhere('id', $queuedJob->id);
+        $this->assertNotEmpty($payload['queue']);
+        $this->assertSame(1, $payload['queue']['your_position']);
+
+        Carbon::setTestNow();
     }
 }

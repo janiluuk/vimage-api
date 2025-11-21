@@ -387,6 +387,55 @@ public function cancelJob(Request $request): JsonResponse
         return response()->json($videoJobs);
     }
 
+    public function processingStatus(): JsonResponse
+    {
+        if ($response = $this->guardAuthenticated()) {
+            return $response;
+        }
+
+        $userId = auth('api')->id();
+
+        $processingJobs = Videojob::where('user_id', $userId)
+            ->where('status', Videojob::STATUS_PROCESSING)
+            ->orderByDesc('updated_at')
+            ->get();
+
+        $queuedJobs = Videojob::where('user_id', $userId)
+            ->where('status', Videojob::STATUS_APPROVED)
+            ->orderBy('queued_at')
+            ->orderBy('id')
+            ->get();
+
+        return response()->json([
+            'processing' => $processingJobs->map(fn (Videojob $job) => $this->serializeJobStatus($job)),
+            'queue' => $queuedJobs->map(fn (Videojob $job) => $this->serializeJobStatus($job, true)),
+            'counts' => [
+                'processing' => Videojob::where('status', Videojob::STATUS_PROCESSING)->count(),
+                'queued' => Videojob::where('status', Videojob::STATUS_APPROVED)->count(),
+            ],
+        ]);
+    }
+
+    public function processingQueue(): JsonResponse
+    {
+        if ($response = $this->guardAuthenticated()) {
+            return $response;
+        }
+
+        $userId = auth('api')->id();
+
+        $queueJobs = Videojob::where('user_id', $userId)
+            ->whereIn('status', [Videojob::STATUS_APPROVED, Videojob::STATUS_PROCESSING])
+            ->orderByRaw('queued_at IS NULL')
+            ->orderBy('queued_at')
+            ->orderBy('id')
+            ->get();
+
+        return response()->json(
+            $queueJobs->map(fn (Videojob $job) => $this->serializeJobStatus($job, true))
+        );
+    }
+
     private function persistUploadedFile(Request $request): array
     {
         $uploadedFile = $request->file('attachment');
@@ -480,5 +529,23 @@ public function cancelJob(Request $request): JsonResponse
         $queue = env($envKey);
 
         return ! empty($queue) ? $queue : $default;
+    }
+
+    private function serializeJobStatus(Videojob $videoJob, bool $includeQueueInfo = false): array
+    {
+        return [
+            'id' => $videoJob->id,
+            'status' => $videoJob->status,
+            'progress' => $videoJob->progress,
+            'estimated_time_left' => $videoJob->estimated_time_left,
+            'job_time' => $videoJob->job_time,
+            'queued_at' => $this->queuedAtTimestamp($videoJob->queued_at),
+            'generator' => $videoJob->generator,
+            'model_id' => $videoJob->model_id,
+            'prompt' => $videoJob->prompt,
+            'negative_prompt' => $videoJob->negative_prompt,
+            'frame_count' => $videoJob->frame_count,
+            'queue' => $includeQueueInfo ? $videoJob->getQueueInfo() : [],
+        ];
     }
 }
