@@ -71,8 +71,22 @@ class VideoProcessor:
         self.controlnetUnits = []
         self.isAnimated = None
 
+        api_port = self.args.api_port or options.get("api_port")
+        cli_hosts = (
+            [h.strip() for h in self.args.api_hosts.split(",") if h.strip()]
+            if getattr(self.args, "api_hosts", None)
+            else None
+        )
+        api_host = self.args.api_host if getattr(self.args, "api_host", None) else None
+        api_hosts = cli_hosts if cli_hosts else api_host or options.get("api_host")
+
         # create API client with custom host, port
-        self.api = webuiapi.WebUIApi(host=options.get("api_host"), port=options.get("api_port"), sampler=self.args.sampler, steps=self.args.steps)
+        self.api = webuiapi.WebUIApi(
+            host=api_hosts,
+            port=api_port,
+            sampler=self.args.sampler,
+            steps=self.args.steps,
+        )
         self.cnx = mysql.connector.connect(**DB_CONFIG)
 
     def __del__(self):
@@ -586,6 +600,12 @@ parser.add_argument('--prompt', type=str,
                     help='words to emphasize when generating frames')
 parser.add_argument('--negative_prompt', type=str,
                     help='words to de-emphasize when generating frames')
+parser.add_argument('--api_host', type=str,
+                    help='Stable Diffusion API host (overrides default setting)')
+parser.add_argument('--api_hosts', type=str,
+                    help='Comma-separated Stable Diffusion API hosts to load balance requests')
+parser.add_argument('--api_port', type=str, default=options.get("api_port"),
+                    help='Stable Diffusion API port (default: 7860)')
 parser.add_argument('--outfile', default='out.mp4', type=str,
                     help='filename for the generated file')
 parser.add_argument('--preview_url', type=str,
