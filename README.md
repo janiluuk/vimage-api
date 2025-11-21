@@ -93,7 +93,13 @@ git rebase origin/main
 git rebase --continue
 ```
 
-If conflicts arise in lockfiles, prefer regenerating them (`composer install`, `npm install`) instead of hand-editing. Always run `php artisan test` and `npm run build` after a rebase to confirm the working tree is consistent.
+### Resolving conflicts safely
+
+- If the upstream repository is private, make sure your Git remote is authenticated before fetching (a GitHub personal access token with `repo` scope works for HTTPS URLs).
+- For lockfiles (`composer.lock`, `package-lock.json`), do **not** hand-edit. Delete the conflicted file, reinstall dependencies (`composer install` and `npm install`), and commit the regenerated file to guarantee consistency.
+- Always run `php artisan test` and `npm run build` after resolving conflicts to validate the working tree.
+
+The repository includes merge drivers that prefer the local copy of lockfiles during rebases to reduce noise, but you should still regenerate them if upstream changed dependencies.
 
 ## API Overview
 

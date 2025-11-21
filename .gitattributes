@@ -1,11 +1,16 @@
-* text=auto
+# Normalize line endings across the repo
+* text=auto eol=lf
 
-*.blade.php diff=html
-*.css diff=css
-*.html diff=html
-*.md diff=markdown
-*.php diff=php
+# Avoid noisy merge conflicts in generated artifacts
+composer.lock merge=ours
+package-lock.json merge=ours
+public/build/** linguist-generated
 
-/.github export-ignore
-CHANGELOG.md export-ignore
-.styleci.yml export-ignore
+# Ensure images and binaries are not modified by text filters
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.mp4 binary
+*.mov binary
