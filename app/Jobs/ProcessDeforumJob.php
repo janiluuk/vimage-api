@@ -23,14 +23,14 @@ class ProcessDeforumJob implements ShouldQueue, ShouldBeUnique
     public $uniqueFor = 3600;
     const MAX_RETRIES = 5;
 
-    public function __construct(public Videojob $videoJob, public int $previewFrames = 0)
+    public function __construct(public Videojob $videoJob, public int $previewFrames = 0, public ?int $extendFromJobId = null)
     {
 
     }
 
     public function uniqueId(): string
     {
-        return $this->videoJob->id . '-' . $this->previewFrames;
+        return $this->videoJob->id . '-' . $this->previewFrames . '-' . ($this->extendFromJobId ?? 'base');
     }
 
     /**
@@ -59,7 +59,7 @@ class ProcessDeforumJob implements ShouldQueue, ShouldBeUnique
                 $this->fail("not a deforum job (".$this->videoJob->generator.")");
             }
             Log::info("Found existing process, aborting..");
-            return;
+            return $this->release($this->backoff);
         }
         if ($this->videoJob) {
             $videoJob = $this->videoJob;
@@ -86,7 +86,7 @@ class ProcessDeforumJob implements ShouldQueue, ShouldBeUnique
                 
                 Log::info("Starting " . ($this->previewFrames ? " PREVIEW " : "") . "conversion for {$videoJob->filename} to {$targetFile} URL: ($targetUrl} ");
                 
-                $service->startProcess($videoJob, $this->previewFrames);
+                $service->startProcess($videoJob, $this->previewFrames, $this->extendFromJobId);
 
                 if (file_exists($targetFile) && $this->previewFrames == 0) {
 

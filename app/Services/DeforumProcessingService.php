@@ -57,7 +57,7 @@ class DeforumProcessingService
     }
 
 
-    public function startProcess(Videojob $videoJob, $previewFrames = 0)
+    public function startProcess(Videojob $videoJob, $previewFrames = 0, ?int $extendFromJobId = null)
     {
         $isPreview = $previewFrames > 0;
 
@@ -65,7 +65,13 @@ class DeforumProcessingService
             $videoJob = $this->parseJob($videoJob, $videoJob->getOriginalVideoPath());
             
             $videoJob->save();
-            $cmd = $this->buildCommandLine($videoJob, $videoJob->getOriginalVideoPath(), $videoJob->getFinishedVideoPath(), $previewFrames);
+            $cmd = $this->buildCommandLine(
+                $videoJob,
+                $videoJob->getOriginalVideoPath(),
+                $videoJob->getFinishedVideoPath(),
+                $previewFrames,
+                $extendFromJobId
+            );
             $this->killProcess($videoJob->id);
             Log::info("Deforum Conversion {$videoJob->id}: Running {$cmd}");
             $process = Process::fromShellCommandline($cmd);
@@ -216,7 +222,7 @@ class DeforumProcessingService
         }
     }
 
-    private function buildCommandLine(VideoJob $videoJob, $sourceFile, $outFile, $previewFrames = 0)
+    private function buildCommandLine(VideoJob $videoJob, $sourceFile, $outFile, $previewFrames = 0, ?int $extendFromJobId = null)
     {
         if ($previewFrames < 5 && $previewFrames > 0 ) $previewFrames = 5;
 
@@ -228,14 +234,16 @@ class DeforumProcessingService
         $cmdString = '';
         $json_settings=[];
 
+        $initImg = $this->resolveInitImage($videoJob, $extendFromJobId);
+
         $params = [
             'modelFile' => $modelFile->filename,
-            'init_img' => $videoJob->getOriginalVideoPath(),
+            'init_img' => $initImg,
             'json_settings_file' => '/www/api/scripts/zoom.json',
         ];
-        
+
         $json_settings['prompts'] = '{ "0": "' . addslashes($prompts[0]) .  ' --neg ' . addslashes($prompts[1]) . '" }';
-        $json_settings['checkpoint_schedule'] = '"0: (\"' . $modelFilename . '\"), 100: (\"' . $modelFilename . '\")"';   
+        $json_settings['checkpoint_schedule'] = '"0: (\"' . $modelFilename . '\"), 100: (\"' . $modelFilename . '\")"';
         $json_settings['max_frames'] =  $previewFrames > 0 ? $previewFrames : (int)$videoJob->frame_count;
         $json_settings['sd_model_hash'] = isset($file[1]) ? '"' . str_replace("]", "", $file[1]) . '"' : '""';
         $json_settings['sd_model_name'] = '"' .trim($file[0]) . '"';
@@ -245,7 +253,36 @@ class DeforumProcessingService
         $json_settings['H'] = $videoJob->height > 0 ? $videoJob->height : 960;
 
 
-        $videoJob->generation_parameters = json_encode($params+$json_settings);
+        $normalizedSettings = [
+            'prompts' => [
+                'positive' => $prompts[0],
+                'negative' => $prompts[1],
+            ],
+            'checkpoint_schedule' => $modelFilename,
+            'max_frames' => $json_settings['max_frames'],
+            'sd_model_hash' => isset($file[1]) ? str_replace("]", "", $file[1]) : '',
+            'sd_model_name' => trim($file[0]),
+            'dimensions' => [
+                'width' => $videoJob->width > 0 ? $videoJob->width : 540,
+                'height' => $videoJob->height > 0 ? $videoJob->height : 960,
+            ],
+        ];
+
+        $videoJob->generation_parameters = json_encode([
+            'model_id' => $videoJob->model_id,
+            'prompts' => $normalizedSettings['prompts'],
+            'frame_count' => $json_settings['max_frames'],
+            'sd_model_hash' => $normalizedSettings['sd_model_hash'],
+            'sd_model_name' => $normalizedSettings['sd_model_name'],
+            'dimensions' => $normalizedSettings['dimensions'],
+            'seed' => $videoJob->seed,
+            'denoising' => $videoJob->denoising,
+            'fps' => $videoJob->fps,
+            'length' => $videoJob->length,
+            'extend_from_job' => $extendFromJobId,
+            'init_img' => $initImg,
+            'json_settings' => $normalizedSettings,
+        ]);
         $videoJob->revision = md5($videoJob->generation_parameters);
 
         //$json_settings['skip_video_creation'] = $previewFrames > 0 ? 'true' : 'false';
@@ -276,6 +313,49 @@ class DeforumProcessingService
         ];
 
         return implode(' ', $cmdParts);
+    }
+
+    private function resolveInitImage(Videojob $videoJob, ?int $extendFromJobId): string
+    {
+        if ($extendFromJobId === null) {
+            return $videoJob->getOriginalVideoPath();
+        }
+
+        $sourceJob = Videojob::find($extendFromJobId);
+
+        if (! $sourceJob) {
+            return $videoJob->getOriginalVideoPath();
+        }
+
+        $sourcePath = $sourceJob->hasFinishedVideo() ? $sourceJob->getFinishedVideoPath() : $sourceJob->getOriginalVideoPath();
+
+        if (! file_exists($sourcePath)) {
+            return $videoJob->getOriginalVideoPath();
+        }
+
+        $targetDir = dirname($videoJob->getOriginalVideoPath());
+        $initFramePath = sprintf('%s/%s_extend_init.png', $targetDir, $videoJob->id);
+
+        try {
+            $command = sprintf(
+                'ffmpeg -y -sseof -1 -i %s -vframes 1 %s',
+                escapeshellarg($sourcePath),
+                escapeshellarg($initFramePath)
+            );
+
+            $process = Process::fromShellCommandline($command);
+            $process->mustRun();
+
+            return $initFramePath;
+        } catch (ProcessFailedException $exception) {
+            Log::warning('Failed to extract last frame for init image, falling back to original', [
+                'video_job_id' => $videoJob->id,
+                'source_job' => $extendFromJobId,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return $videoJob->getOriginalVideoPath();
+        }
     }
     public function applyPrompts(Videojob $videoJob)
     {
