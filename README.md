@@ -1,190 +1,76 @@
 # Vimage Backend API
 
-A Laravel 10 backend that powers the Vimage service, providing authentication, media generation workflows, financial operations,
- and support tooling for the front-end clients. The API is organized around a few core pillars:
+Laravel 10 API that powers uploads, video production, and marketplace features for the clients.
 
-- **Identity & security** – JWT-based auth, social login callbacks, email verification, and password recovery.
-- **Video generation** – Upload/parse video sources, enqueue vid2vid or deforum jobs with prioritized queues, finalize/cancel jobs, and poll progress.
-- **Marketplace** – Catalogs, products, properties, orders, wallets, and finance operations with admin-only oversight routes.
-- **Collaboration & support** – Chats/messages between users plus support ticket submission and follow-up.
+## What’s inside
 
-## Features
+- JWT-authenticated APIs with social login and password recovery.
+- Video workflows for vid2vid and Deforum: upload media, submit parameters, extend a run, finalize, and track progress.
+- Catalog and marketplace primitives (categories, products, orders, wallets, finance operations).
+- Messaging, chats, and support tickets.
 
-- JWT-based authentication flows, including social login callbacks and password recovery.
-- Video generation job lifecycle: upload source media, submit processing parameters, finalize jobs, and track status.
-- Catalog management for categories, products, and properties with role-aware administration routes.
-- Messaging between users (chats and direct messages) plus support request ticketing.
-- Wallets, orders, finance operations, and user ratings to support marketplace-style transactions.
+## Requirements
 
-## Tech Stack
-
-- PHP 8.2+, Laravel 10
-- MySQL, Redis, Beanstalkd queues (via Pheanstalk)
-- FFmpeg (via `pbmedia/laravel-ffmpeg` and `php-ffmpeg/php-ffmpeg`)
-- Vite build tooling for assets
-
-## Prerequisites
-
-- PHP 8.2+
-- Composer 2
+- PHP 8.2+, Composer 2
 - Node.js 18+ and npm
-- MySQL or MariaDB
-- Redis (for queues/cache) and Beanstalkd if you run the queue workers locally
-- FFmpeg binaries available on the host
+- MySQL/MariaDB and Redis
+- Beanstalkd (queue) and FFmpeg binaries available on the host
 
-## Quick Start (Docker)
-
-The repository includes a Docker-based workflow for parity with production:
-
-```bash
-cp .env.example .env
-# Start database, cache, and app containers
-docker-compose up -d
-# Install backend dependencies
-docker-compose exec app composer install
-# Generate keys and secrets
-docker-compose exec app php artisan key:generate
-docker-compose exec app php artisan jwt:secret
-# Prepare the database
-docker-compose exec app php artisan migrate:fresh --seed
-```
-
-Run a queue worker for background jobs (video generation, emails, etc.):
-
-```bash
-docker-compose exec app php artisan queue:work beanstalkd
-```
-
-## Local Development (without Docker)
+## Setup
 
 ```bash
 cp .env.example .env
 composer install
 npm install
-npm run build
 php artisan key:generate
 php artisan jwt:secret
 php artisan migrate --seed
+npm run build
 ```
 
-Make sure your `.env` is configured with database credentials, Redis connection details, and queue names (`HIGH_PRIORITY_QUEUE`, `MEDIUM_PRIORITY_QUEUE`, `LOW_PRIORITY_QUEUE`). FFmpeg paths can be customized via the `FFMPEG_PATH` and `FFPROBE_PATH` environment variables if needed.
-
-### Helper scripts
-
-- `scripts/docker-build-run.sh` – builds the Docker images, boots the stack, installs backend dependencies, and applies database migrations/seeds. Ideal for first-time setup or refreshing a development environment.
-
-## Common Commands
-
-- Clear logs: `php artisan log:clear`
-- Generate IDE helpers: `php artisan ide-helper:generate && php artisan ide-helper:models -N && php artisan ide-helper:meta`
-- Run backend tests: `phpunit` (or `./vendor/bin/phpunit`)
-- Build assets: `npm run build`
-- API documentation (Scribe): `php artisan scribe:generate`
-
-## Keeping Your Branch Up To Date
-
-For PRs that fall behind `main`, rebase instead of merging to keep history clean and avoid noisy merge commits. A dedicated PR workflow now fails fast when your branch cannot merge cleanly with the base branch, so fix any local conflicts before pushing:
+Docker users can start the stack with `docker-compose up -d` and run the same artisan commands inside the `app` container. Queue
+workers should target the configured names (`HIGH_PRIORITY_QUEUE`, `MEDIUM_PRIORITY_QUEUE`, `LOW_PRIORITY_QUEUE`):
 
 ```bash
-git remote add origin <your-fork-or-upstream-url>   # only once
-git fetch origin
-git rebase origin/main
-# Resolve any conflicts, then continue
-git rebase --continue
-
-# Locally mirror the mergeability check that runs in CI
-BASE="main"  # or the PR base branch
-git fetch origin "$BASE"
-git merge --no-commit --no-ff "origin/$BASE"  # aborts with non-zero on conflicts
-git merge --abort
+php artisan queue:work beanstalkd --queue=critical,medium,low
 ```
 
-You can also run the helper script to enforce the same flow (it will exit early if the `origin` remote is missing):
+## API quick reference
 
-```bash
-scripts/rebase-main.sh            # defaults to main
-scripts/rebase-main.sh develop    # or another base branch name
-```
+### Auth
 
-### Resolving conflicts safely
+`POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout` (auth), `POST /api/auth/reset-password`, `GET /api/auth/me`.
+API v2 mirrors these at `/api/v2/*` plus `/api/v2/me`.
 
-- If the upstream repository is private, make sure your Git remote is authenticated before fetching (a GitHub personal access token with `repo` scope works for HTTPS URLs).
-- For lockfiles (`composer.lock`, `package-lock.json`), do **not** hand-edit. Delete the conflicted file, reinstall dependencies (`composer install` and `npm install`), and commit the regenerated file to guarantee consistency.
-- Always run `php artisan test` and `npm run build` after resolving conflicts to validate the working tree.
+### Video jobs
 
-The repository includes merge drivers that prefer the local copy of lockfiles during rebases to reduce noise, but you should still regenerate them if upstream changed dependencies.
+- `POST /api/upload` — upload source media with `attachment` and `type` of `vid2vid` or `deforum`.
+- `POST /api/submit` — submit vid2vid parameters (`modelId`, `cfgScale`, `prompt`, `frameCount`, `denoising`).
+- `POST /api/submitDeforum` — submit deforum parameters (`modelId`, `prompt`, `preset`, `length`, optional `frameCount`).
+- `POST /api/submitDeforum` with `extendFromJobId` — extend a finished deforum job using its saved settings and last frame as the
+  init image.
+- `POST /api/finalize` / `POST /api/finalizeDeforum` — approve and enqueue jobs for processing.
+- `POST /api/cancelJob/{videoId}` — cancel a pending job.
+- `GET /api/status/{videoId}` — check job progress.
 
-## API Overview
+### Marketplace & messaging
 
-### Authentication
-
-| Method | Path | Description |
-| --- | --- | --- |
-| POST | `/api/auth/register` | Register a new user |
-| POST | `/api/auth/login` | Login with email/password |
-| POST | `/api/auth/verified-email` | Confirm email verification |
-| POST | `/api/auth/forgot-password` | Request reset link |
-| POST | `/api/auth/reset-password` | Reset password with token |
-| POST | `/api/auth/logout` | Logout (auth:api) |
-| GET  | `/api/auth/me` | Retrieve authenticated profile |
-| GET  | `/{provider}/auth` & `/{provider}/callback` | Socialite login flows |
-
-**API v2 auth:** `/api/v2/login`, `/api/v2/logout`, `/api/v2/register`, `/api/v2/password-forgot`, `/api/v2/password-reset`, `/api/v2/me`.
-
-### Video Generation
-
-| Method | Path | Description |
-| --- | --- | --- |
-| POST | `/api/upload` | Upload source media (vid2vid/deforum) |
-| POST | `/api/submit` | Submit vid2vid job parameters |
-| POST | `/api/submitDeforum` | Submit deforum job parameters |
-| POST | `/api/finalize` | Approve and enqueue vid2vid job |
-| POST | `/api/finalizeDeforum` | Approve and enqueue deforum job |
-| POST | `/api/cancelJob/{videoId}` | Cancel a pending job |
-| GET  | `/api/status/{videoId}` | Check job progress |
-
-Uploads require `attachment` plus a `type` of `vid2vid` or `deforum`. Authenticated users own their jobs; subsequent actions validate ownership before enqueuing work.
-
-### Catalog & Marketplace
-
-| Method | Path | Description |
-| --- | --- | --- |
-| GET | `/api/categories` | List categories |
-| GET | `/api/categories/{id}` | Category details |
-| GET | `/api/categories/by-user-id/{userId?}` | Categories with products for a user (auth) |
-| GET | `/api/products` | Products by category |
-| GET | `/api/products/{productId}` | Product detail |
-| POST/PUT/DELETE | `/api/products` | Manage products (auth) |
-| GET | `/api/orders/purchases` & `/api/orders/sales` | Order history |
-| POST | `/api/orders` | Create order |
-| PATCH | `/api/orders/confirm-order` | Confirm order |
-
-Wallets and finance operations live under `/api/user-wallets`, `/api/wallet-types`, and `/api/finance-operations` with authenticated access and admin-only aggregations at `/api/administration`.
-
-### Messaging & Support
-
-| Method | Path | Description |
-| --- | --- | --- |
-| GET | `/api/chats/get-chats-by-current-user` | Chats for authenticated user |
-| GET | `/api/chats/get-chat-by-user-id/{userId}` | Locate/create chat with a user |
-| POST | `/api/chats` | Create chat |
-| GET | `/api/messages/get-messages-by-chat-id/{chatId}` | Messages for a chat |
-| POST | `/api/messages` | Send a message |
-| POST | `/api/support-request` | Submit support request |
-| POST/GET/PATCH | `/api/support-requests...` | Retrieve and update support tickets (auth) |
+- Categories and products: `GET /api/categories`, `GET /api/categories/{id}`, `GET /api/products`, `GET /api/products/{productId}`,
+  plus authenticated CRUD under `/api/products`.
+- Orders and finance: `/api/orders/*`, `/api/user-wallets`, `/api/wallet-types`, `/api/finance-operations`.
+- Chats and messages: `/api/chats/*`, `/api/messages/*` (auth).
+- Support tickets: `/api/support-request` and `/api/support-requests/*`.
 
 ### Administration
 
-Admin-only routes (behind `AuthorizationChecker` and `IsAdministratorChecker`) provide user management, finance oversight, and password resets under the `/api/administration` prefix.
+Routes under `/api/administration` are protected by `AuthorizationChecker` and `IsAdministratorChecker` for user management and
+financial oversight.
 
-## Project Structure
+## Common tooling
 
-- `app/Http/Controllers` – HTTP controllers, including JSON:API resources and video job orchestration.
-- `app/Models` – Eloquent models such as `Videojob` and catalog entities.
-- `routes/api.php` – Route definitions for all API endpoints.
-- `resources/` – Front-end assets built with Vite.
+- Run tests: `./vendor/bin/phpunit`
+- Generate API docs (Scribe): `php artisan scribe:generate`
+- Clear logs: `php artisan log:clear`
 
-## Debugging
-
-Xdebug is available in the Docker environment; configure your IDE to listen for connections. Use `php artisan tinker` for quick REPL-style debugging.
-
+Xdebug is available in the Docker environment; point your IDE to the running container and use `php artisan tinker` for quick
+REPL-style checks.

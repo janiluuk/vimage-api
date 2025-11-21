@@ -1,11 +1,22 @@
-import json
-import requests
-import io
+"""Lightweight client for interacting with the Stable Diffusion WebUI API.
+
+The module provides a small, dependency-free interface for common API calls
+used by the scripts in this repository. It keeps network usage minimal by
+reusing a single requests session and offering synchronous and asynchronous
+helpers for the same endpoints.
+"""
+
 import base64
-from PIL import Image, PngImagePlugin
+import io
+import json
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Dict, Any
+from typing import Any, Dict, List, Sequence, Union
+
+from urllib.parse import urlparse, urlunparse
+
+import requests
+from PIL import Image, PngImagePlugin
 
 
 class Upscaler(str, Enum):
@@ -144,20 +155,24 @@ class WebUIApi:
         self,
         host="127.0.0.1",
         port=7860,
-        baseurl=None,
+        baseurl: Union[str, Sequence[str], None] = None,
+        hosts: Union[str, Sequence[str], None] = None,
         sampler="Euler a",
         steps=20,
         use_https=False,
         username=None,
         password=None,
     ):
+        hosts_list = self._normalize_hosts(hosts) or self._normalize_hosts(host)
+        scheme = "https" if use_https else "http"
         if baseurl is None:
-            if use_https:
-                baseurl = f"https://{host}:{port}/sdapi/v1"
-            else:
-                baseurl = f"http://{host}:{port}/sdapi/v1"
+            baseurls = [f"{scheme}://{h}:{port}/sdapi/v1" for h in hosts_list]
+        else:
+            baseurls = self._normalize_hosts(baseurl)
 
-        self.baseurl = baseurl
+        self.baseurls = baseurls
+        self.baseurl = baseurls[0]
+        self._baseurl_index = 0
         self.default_sampler = sampler
         self.default_steps = steps
 
@@ -167,6 +182,38 @@ class WebUIApi:
             self.set_auth(username, password)
         else:
             self.check_controlnet()
+
+        # Reset rotation so the first user-initiated request starts from the
+        # beginning of the baseurl list.
+        self._baseurl_index = 0
+
+    @staticmethod
+    def _normalize_hosts(hosts: Union[str, Sequence[str], None]) -> List[str]:
+        if hosts is None:
+            return []
+        if isinstance(hosts, str):
+            return [hosts]
+        return [h for h in hosts if h]
+
+    def _next_baseurl(self) -> str:
+        baseurl = self.baseurls[self._baseurl_index]
+        self._baseurl_index = (self._baseurl_index + 1) % len(self.baseurls)
+        return baseurl
+
+    def _build_url(self, endpoint: str, include_api_prefix: bool = True) -> str:
+        normalized_endpoint = endpoint.lstrip("/")
+        baseurl = self._next_baseurl()
+        if include_api_prefix:
+            return f"{baseurl.rstrip('/')}/{normalized_endpoint}"
+
+        parsed_url = urlparse(baseurl)
+        return urlunparse((parsed_url.scheme, parsed_url.netloc, f"/{normalized_endpoint}", "", "", ""))
+
+    def _api_url(self, endpoint: str) -> str:
+        return self._build_url(endpoint, include_api_prefix=True)
+
+    def _root_url(self, endpoint: str) -> str:
+        return self._build_url(endpoint, include_api_prefix=False)
 
     def check_controlnet(self):
         try:
@@ -349,7 +396,7 @@ class WebUIApi:
             payload["alwayson_scripts"]["ControlNet"] = {"args": []}
 
         return self.post_and_get_api_result(
-            f"{self.baseurl}/txt2img", payload, use_async
+            self._api_url("txt2img"), payload, use_async
         )
 
     def post_and_get_api_result(self, url, json, use_async):
@@ -493,7 +540,7 @@ class WebUIApi:
 
 
         return self.post_and_get_api_result(
-            f"{self.baseurl}/img2img", payload, use_async
+            self._api_url("img2img"), payload, use_async
         )
 
     def extra_single_image(
@@ -532,7 +579,7 @@ class WebUIApi:
         }
 
         return self.post_and_get_api_result(
-            f"{self.baseurl}/extra-single-image", payload, use_async
+            self._api_url("extra-single-image"), payload, use_async
         )
 
     def extra_batch_images(
@@ -583,7 +630,7 @@ class WebUIApi:
         }
 
         return self.post_and_get_api_result(
-            f"{self.baseurl}/extra-batch-images", payload, use_async
+            self._api_url("extra-batch-images"), payload, use_async
         )
 
     # XXX 500 error (2022/12/26)
@@ -592,7 +639,7 @@ class WebUIApi:
             "image": b64_img(image),
         }
 
-        response = self.session.post(url=f"{self.baseurl}/png-info", json=payload)
+        response = self.session.post(url=self._api_url("png-info"), json=payload)
         return self._to_api_result(response)
 
     # XXX always returns empty info (2022/12/26)
@@ -601,108 +648,102 @@ class WebUIApi:
             "image": b64_img(image),
         }
 
-        response = self.session.post(url=f"{self.baseurl}/interrogate", json=payload)
+        response = self.session.post(url=self._api_url("interrogate"), json=payload)
         return self._to_api_result(response)
 
     def interrupt(self):
-        response = self.session.post(url=f"{self.baseurl}/interrupt")
+        response = self.session.post(url=self._api_url("interrupt"))
         return response.json()
 
     def skip(self):
-        response = self.session.post(url=f"{self.baseurl}/skip")
+        response = self.session.post(url=self._api_url("skip"))
         return response.json()
 
     def get_options(self):
-        response = self.session.get(url=f"{self.baseurl}/options")
+        response = self.session.get(url=self._api_url("options"))
         return response.json()
 
     def set_options(self, options):
-        response = self.session.post(url=f"{self.baseurl}/options", json=options)
+        response = self.session.post(url=self._api_url("options"), json=options)
         return response.json()
 
 
     def get_progress(self):
-        response = self.session.get(url=f"{self.baseurl}/progress")
+        response = self.session.get(url=self._api_url("progress"))
         return response.json()
 
     def get_cmd_flags(self):
-        response = self.session.get(url=f"{self.baseurl}/cmd-flags")
+        response = self.session.get(url=self._api_url("cmd-flags"))
         return response.json()
 
     def get_samplers(self):
-        response = self.session.get(url=f"{self.baseurl}/samplers")
+        response = self.session.get(url=self._api_url("samplers"))
         return response.json()
 
     def get_sd_vae(self):
-        response = self.session.get(url=f"{self.baseurl}/sd-vae")
+        response = self.session.get(url=self._api_url("sd-vae"))
         return response.json()
 
     def get_upscalers(self):
-        response = self.session.get(url=f"{self.baseurl}/upscalers")
+        response = self.session.get(url=self._api_url("upscalers"))
         return response.json()
 
     def get_latent_upscale_modes(self):
-        response = self.session.get(url=f"{self.baseurl}/latent-upscale-modes")
+        response = self.session.get(url=self._api_url("latent-upscale-modes"))
         return response.json()
 
     def get_loras(self):
-        response = self.session.get(url=f"{self.baseurl}/loras")
+        response = self.session.get(url=self._api_url("loras"))
         return response.json()
 
     def get_sd_models(self):
-        response = self.session.get(url=f"{self.baseurl}/sd-models")
+        response = self.session.get(url=self._api_url("sd-models"))
         return response.json()
 
     def get_hypernetworks(self):
-        response = self.session.get(url=f"{self.baseurl}/hypernetworks")
+        response = self.session.get(url=self._api_url("hypernetworks"))
         return response.json()
 
     def get_face_restorers(self):
-        response = self.session.get(url=f"{self.baseurl}/face-restorers")
+        response = self.session.get(url=self._api_url("face-restorers"))
         return response.json()
 
     def get_realesrgan_models(self):
-        response = self.session.get(url=f"{self.baseurl}/realesrgan-models")
+        response = self.session.get(url=self._api_url("realesrgan-models"))
         return response.json()
-    
+
     def get_prompt_styles(self):
-        response = self.session.get(url=f"{self.baseurl}/prompt-styles")
+        response = self.session.get(url=self._api_url("prompt-styles"))
         return response.json()
 
     def get_artist_categories(self):  # deprecated ?
-        response = self.session.get(url=f"{self.baseurl}/artist-categories")
+        response = self.session.get(url=self._api_url("artist-categories"))
         return response.json()
 
     def get_artists(self):  # deprecated ?
-        response = self.session.get(url=f"{self.baseurl}/artists")
+        response = self.session.get(url=self._api_url("artists"))
         return response.json()
 
     def refresh_checkpoints(self):
-        response = self.session.post(url=f"{self.baseurl}/refresh-checkpoints")
+        response = self.session.post(url=self._api_url("refresh-checkpoints"))
         return response.json()
 
     def get_scripts(self):
-        response = self.session.get(url=f"{self.baseurl}/scripts")
+        response = self.session.get(url=self._api_url("scripts"))
         return response.json()
 
     def get_embeddings(self):
-        response = self.session.get(url=f"{self.baseurl}/embeddings")
+        response = self.session.get(url=self._api_url("embeddings"))
         return response.json()
 
     def get_memory(self):
-        response = self.session.get(url=f"{self.baseurl}/memory")
+        response = self.session.get(url=self._api_url("memory"))
         return response.json()
 
     def get_endpoint(self, endpoint, baseurl):
         if baseurl:
-            return f"{self.baseurl}/{endpoint}"
-        else:
-            from urllib.parse import urlparse, urlunparse
-
-            parsed_url = urlparse(self.baseurl)
-            basehost = parsed_url.netloc
-            parsed_url2 = (parsed_url[0], basehost, endpoint, "", "", "")
-            return urlunparse(parsed_url2)
+            return self._api_url(endpoint)
+        return self._root_url(endpoint)
 
     def custom_get(self, endpoint, baseurl=False):
         url = self.get_endpoint(endpoint, baseurl)
