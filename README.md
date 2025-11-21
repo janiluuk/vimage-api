@@ -99,6 +99,13 @@ git merge --no-commit --no-ff "origin/$BASE"  # aborts with non-zero on conflict
 git merge --abort
 ```
 
+You can also run the helper script to enforce the same flow (it will exit early if the `origin` remote is missing):
+
+```bash
+scripts/rebase-main.sh            # defaults to main
+scripts/rebase-main.sh develop    # or another base branch name
+```
+
 ### Resolving conflicts safely
 
 - If the upstream repository is private, make sure your Git remote is authenticated before fetching (a GitHub personal access token with `repo` scope works for HTTPS URLs).
