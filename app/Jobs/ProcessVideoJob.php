@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\ModelFile;
 use DateTimeInterface;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -15,17 +16,23 @@ use Illuminate\Support\Facades\Log;
 
 set_time_limit(27200);
 
-class ProcessVideoJob implements ShouldQueue
+class ProcessVideoJob implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
     public $timeout = 27200;
     public $tries = 200;
     public $backoff = 30; // delay in seconds between retries
+    public $uniqueFor = 3600;
     const MAX_RETRIES = 5;
 
     public function __construct(public Videojob $videoJob, public int $previewFrames = 0)
     {
 
+    }
+
+    public function uniqueId(): string
+    {
+        return $this->videoJob->id . '-' . $this->previewFrames;
     }
 
     /**

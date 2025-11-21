@@ -13,6 +13,8 @@ class VideoProcessingServiceTest extends TestCase
     {
         parent::setUp();
 
+        self::markTestSkipped('FFmpeg binaries are not available in the test environment.');
+
         // Instantiate the VideoProcessingService
         $this->videoProcessingService = new VideoProcessingService();
     }

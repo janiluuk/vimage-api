@@ -14,7 +14,6 @@
         "doctrine/dbal": "^3.6",
         "fruitcake/laravel-cors": "dev-develop",
         "guzzlehttp/guzzle": "^7.2",
-        "kitloong/laravel-migrations-generator": "*",
         "laravel-json-api/laravel": "^3.0",
         "laravel/framework": "^10.0",
         "laravel/socialite": "^5.8",

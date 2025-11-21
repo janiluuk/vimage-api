@@ -20,7 +20,10 @@ return new class extends Migration
             $table->string('filename');
             $table->string('original_filename')->nullable();
             $table->string('outfile')->nullable();
-            $table->text('prompt')->nullable()->fulltext('prompt');
+            $table->text('prompt')->nullable();
+            if (Schema::getConnection()->getDriverName() !== 'sqlite') {
+                $table->fulltext('prompt');
+            }
             $table->integer('cfg_scale')->default(7);
             $table->enum('status', ['pending', 'processing', 'finished', 'error', 'preview', 'approved', 'cancelled'])->nullable();
             $table->string('url')->nullable();
