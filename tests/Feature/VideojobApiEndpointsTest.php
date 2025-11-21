@@ -157,4 +157,61 @@ class VideojobApiEndpointsTest extends TestCase
             'error' => 'Unauthorized. Not your video.',
         ]);
     }
+
+    public function test_status_includes_queue_snapshot_for_approved_job(): void
+    {
+        Carbon::setTestNow('2024-05-05 12:00:00');
+
+        $approvedJob = Videojob::factory()->create([
+            'status' => Videojob::STATUS_APPROVED,
+            'queued_at' => Carbon::now()->timestamp,
+            'frame_count' => 5,
+        ]);
+
+        Videojob::factory()->create([
+            'status' => Videojob::STATUS_PROCESSING,
+        ]);
+
+        Videojob::factory()->create([
+            'status' => Videojob::STATUS_APPROVED,
+            'queued_at' => Carbon::now()->addMinute()->timestamp,
+        ]);
+
+        $response = $this->getJson("/status/{$approvedJob->id}");
+
+        $response->assertOk();
+
+        $response->assertJson(fn ($json) => $json
+            ->where('status', Videojob::STATUS_APPROVED)
+            ->where('queued_at', Carbon::now()->timestamp)
+            ->has('queue', fn ($queue) => $queue
+                ->where('total_jobs_processing', 1)
+                ->where('total_jobs_in_queue', 2)
+                ->where('your_position', 2)
+                ->where('your_estimated_time', 50)
+                ->etc()
+            )
+            ->etc()
+        );
+
+        Carbon::setTestNow();
+    }
+
+    public function test_non_owner_cannot_finalize_deforum_job(): void
+    {
+        $videoJob = Videojob::factory()->for(User::factory(), 'user')->create([
+            'generator' => 'deforum',
+            'status' => Videojob::STATUS_PROCESSING,
+        ]);
+
+        $this->actingAs(User::factory()->create(), 'api');
+
+        $response = $this->postJson('/api/finalizeDeforum', [
+            'videoId' => $videoJob->id,
+        ]);
+
+        $response->assertStatus(403)->assertJson([
+            'error' => 'Unauthorized. Not your video.',
+        ]);
+    }
 }
