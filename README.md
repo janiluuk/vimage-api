@@ -81,6 +81,20 @@ Make sure your `.env` is configured with database credentials, Redis connection 
 - Build assets: `npm run build`
 - API documentation (Scribe): `php artisan scribe:generate`
 
+## Keeping Your Branch Up To Date
+
+For PRs that fall behind `main`, rebase instead of merging to keep history clean and avoid noisy merge commits:
+
+```bash
+git remote add origin <your-fork-or-upstream-url>   # only once
+git fetch origin
+git rebase origin/main
+# Resolve any conflicts, then continue
+git rebase --continue
+```
+
+If conflicts arise in lockfiles, prefer regenerating them (`composer install`, `npm install`) instead of hand-editing. Always run `php artisan test` and `npm run build` after a rebase to confirm the working tree is consistent.
+
 ## API Overview
 
 ### Authentication
