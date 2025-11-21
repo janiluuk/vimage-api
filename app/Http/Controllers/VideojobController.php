@@ -106,30 +106,55 @@ class VideojobController extends Controller
             'frameCount' => 'numeric|between:1,20',
             'preset' => 'required|string',
             'length' => 'numeric|between:1,20',
+            'extendFromJobId' => 'nullable|integer|exists:video_jobs,id',
         ]);
 
         $frameCount = $request->input('frameCount', 1);
         $videoJob = Videojob::findOrFail($request->input('videoId'));
 
+        $extendFromJobId = $request->input('extendFromJobId');
+        if ($extendFromJobId) {
+            $baseJob = Videojob::findOrFail($extendFromJobId);
+
+            if ($baseJob->generator !== 'deforum') {
+                return response()->json(['message' => 'Only deforum jobs can be extended'], 422);
+            }
+
+            if ($response = $this->assertOwner($baseJob)) {
+                return $response;
+            }
+
+            $persistedParameters = json_decode((string) $baseJob->generation_parameters, true) ?? [];
+
+            $videoJob->model_id = $persistedParameters['model_id'] ?? $baseJob->model_id;
+            $videoJob->prompt = $persistedParameters['prompts']['positive'] ?? $baseJob->prompt;
+            $videoJob->negative_prompt = $persistedParameters['prompts']['negative'] ?? $baseJob->negative_prompt;
+            $videoJob->seed = $persistedParameters['seed'] ?? $baseJob->seed;
+            $videoJob->denoising = $persistedParameters['denoising'] ?? $baseJob->denoising;
+            $videoJob->fps = $persistedParameters['fps'] ?? $baseJob->fps;
+            $videoJob->frame_count = $persistedParameters['frame_count'] ?? $baseJob->frame_count;
+            $videoJob->length = $persistedParameters['length'] ?? $baseJob->length;
+        }
+
         if ($response = $this->assertOwner($videoJob)) {
             return $response;
         }
 
-        $videoJob->model_id = $request->input('modelId');
-        $videoJob->prompt = trim((string) $request->input('prompt'));
-        $videoJob->negative_prompt = trim((string) $request->input('negative_prompt', ''));
+        $videoJob->model_id = $request->input('modelId', $videoJob->model_id);
+        $videoJob->prompt = trim((string) $request->input('prompt', $videoJob->prompt));
+        $videoJob->negative_prompt = trim((string) $request->input('negative_prompt', $videoJob->negative_prompt));
         $videoJob->status = 'processing';
         $videoJob->progress = 5;
-        $seed = $this->normalizeSeed((int) $request->input('seed', -1));
+        $seed = $this->normalizeSeed((int) $request->input('seed', $videoJob->seed ?? -1));
 
-        $videoJob->fps = 24;
+        $videoJob->fps = $videoJob->fps ?? 24;
         $videoJob->generator = 'deforum';
         $videoJob->seed = $seed;
-        $videoJob->length = $request->input('length', 4);
+        $videoJob->length = $request->input('length', $videoJob->length ?? 4);
         $videoJob->frame_count = round($videoJob->length * $videoJob->fps);
         $videoJob->job_time = 3;
         $videoJob->estimated_time_left = ($videoJob->frame_count * 6) + 6;
-        $videoJob->denoising = $request->input('denoising');
+        $videoJob->denoising = $request->input('denoising', $videoJob->denoising);
         $videoJob->queued_at = Carbon::now();
         $videoJob->save();
 
@@ -137,7 +162,7 @@ class VideojobController extends Controller
             ? $this->resolveQueueName('MEDIUM_PRIORITY_QUEUE', 'medium')
             : $this->resolveQueueName('HIGH_PRIORITY_QUEUE', 'high');
         Log::info("Dispatching job with framecount {$frameCount} to queue {$queueName}");
-        ProcessDeforumJob::dispatch($videoJob, $frameCount)->onQueue($queueName);
+        ProcessDeforumJob::dispatch($videoJob, $frameCount, $extendFromJobId)->onQueue($queueName);
 
         return response()->json([
             'id' => $videoJob->id,

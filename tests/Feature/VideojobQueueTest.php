@@ -111,4 +111,103 @@ class VideojobQueueTest extends TestCase
             return $job->videoJob->id === $videoJob->id && $job->queue === 'priority-med';
         });
     }
+
+    public function test_deforum_extension_prefills_from_source_job_and_passes_extend_id(): void
+    {
+        Queue::fake();
+
+        $user = User::factory()->create();
+
+        $sourceJob = Videojob::factory()
+            ->for($user, 'user')
+            ->state([
+                'generator' => 'deforum',
+                'model_id' => 99,
+                'prompt' => 'old prompt',
+                'negative_prompt' => 'old negative',
+                'frame_count' => 40,
+                'fps' => 8,
+                'length' => 5,
+                'seed' => 222,
+                'denoising' => 0.4,
+            ])
+            ->create();
+
+        $sourceJob->generation_parameters = json_encode([
+            'prompts' => [
+                'positive' => 'stored prompt',
+                'negative' => 'stored negative',
+            ],
+            'frame_count' => 72,
+            'fps' => 12,
+            'length' => 6,
+            'seed' => 777,
+            'denoising' => 0.55,
+        ]);
+        $sourceJob->save();
+
+        $videoJob = Videojob::factory()
+            ->for($user, 'user')
+            ->state(['generator' => 'deforum'])
+            ->create([
+                'fps' => null,
+                'length' => null,
+                'frame_count' => null,
+            ]);
+
+        $this->actingAs($user, 'api');
+
+        $response = $this->postJson('/api/submitDeforum', [
+            'videoId' => $videoJob->id,
+            'modelId' => $videoJob->model_id,
+            'prompt' => 'stored prompt',
+            'preset' => 'default',
+            'frameCount' => 2,
+            'extendFromJobId' => $sourceJob->id,
+        ]);
+
+        $response->assertOk();
+
+        $videoJob->refresh();
+
+        $this->assertSame(6, $videoJob->length);
+        $this->assertSame(12, $videoJob->fps);
+        $this->assertSame(72, $videoJob->frame_count);
+        $this->assertSame(777, $videoJob->seed);
+        $this->assertSame(0.55, (float) $videoJob->denoising);
+
+        Queue::assertPushed(ProcessDeforumJob::class, function (ProcessDeforumJob $job) use ($videoJob, $sourceJob) {
+            return $job->videoJob->id === $videoJob->id
+                && $job->extendFromJobId === $sourceJob->id;
+        });
+    }
+
+    public function test_deforum_extension_rejects_non_deforum_source_job(): void
+    {
+        $user = User::factory()->create();
+
+        $sourceJob = Videojob::factory()
+            ->for($user, 'user')
+            ->state(['generator' => 'vid2vid'])
+            ->create();
+
+        $targetJob = Videojob::factory()
+            ->for($user, 'user')
+            ->state(['generator' => 'deforum'])
+            ->create();
+
+        $this->actingAs($user, 'api');
+
+        $response = $this->postJson('/api/submitDeforum', [
+            'videoId' => $targetJob->id,
+            'modelId' => $targetJob->model_id,
+            'prompt' => 'extend attempt',
+            'preset' => 'default',
+            'extendFromJobId' => $sourceJob->id,
+        ]);
+
+        $response->assertStatus(422)->assertJson([
+            'message' => 'Only deforum jobs can be extended',
+        ]);
+    }
 }

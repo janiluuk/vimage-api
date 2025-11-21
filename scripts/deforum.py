@@ -1,54 +1,67 @@
 #!/usr/bin/python3
+"""CLI helper for interacting with the Deforum API.
+
+The script orchestrates Deforum batch creation, status inspection, and job
+management through a small wrapper that accepts command-line arguments. It is
+designed to be run locally against a Stable Diffusion WebUI instance (or
+compatible API) and aims to minimize redundant work by reusing a persistent
+HTTP session and consolidating settings handling.
+"""
+
 import argparse
-from PIL import Image
-import requests
-import json
 import base64
+import json
 import sys
+from typing import Any, Dict, Optional
+
+import requests
+from PIL import Image
 
 
-class DeforumController():
-    def __init__(self, args) -> None:
+class DeforumController:
+    """Controller that wraps the Deforum REST API."""
+
+    def __init__(self, args: argparse.Namespace) -> None:
         self.args = args
-        self.url = ''
+        self.url = ""
         self.host = "http://localhost"
         self.port = 7860
-    
-        self.default_settings_file='./deforum_default_settings.json'
-        self.settings = {
+        self.session = requests.Session()
+
+        self.default_settings_file = "./deforum_default_settings.json"
+        self.settings: Dict[str, Any] = {
             "prompts": {},
         }
-        
+
     def main(self):
         """
         Main execution of the DeforumController.
         """
-        self.port = self.port if self.args.port is None else self.args.port
-        self.host = self.host if self.args.host is None else "http://{0}".format(self.args.host)
-        
-        self.url = "{0}:{1}".format(self.host, self.port)
-        self.parse_prompts()
+        self.port = self.args.port or self.port
+        self.host = self.host if self.args.host is None else f"http://{self.args.host}"
+        self.url = f"{self.host}:{self.port}"
         self.load_settings_from_file(self.default_settings_file)
+        self.parse_prompts()
         if self.args.delete_job:
             res = self.delete_deforum_job(self.args.delete_job)
             print(json.dumps(res, indent=2))
         if self.args.json_settings:
             try:
-                self.merge_json_settings(args.json_settings)
-            
+                self.merge_json_settings(self.args.json_settings)
+
             except Exception as e:
                 print("Error while merging JSON settings:", str(e))
                 return
-        if self.args.show: 
-            val = self.find_value(args.show)
+        if self.args.show:
+            val = self.find_value(self.args.show)
             if val:
-                print("{0} : {1}".format(args.show, val))
+                print(f"{self.args.show} : {val}")
             else:
-                print("Didnt find value {0}".format(args.show))
+                print(f"Didnt find value {self.args.show}")
             exit(0)
         if self.args.show_job:
-            res = self.get_deforum_job(args.show_job)
-            print(json.dumps(res, indent=2))             
+            res = self.get_deforum_job(self.args.show_job)
+            print(json.dumps(res, indent=2))
         if self.args.jobid:
             self.settings["id"] = self.args.jobid
         self.settings["init_images"] = False if self.args.init_img is None else ''
@@ -72,25 +85,26 @@ class DeforumController():
         self.parse_image()
         self.parse_prompts()
 
-        #Print all argumanets to terminal
+        #Print all arguments to terminal
         if self.args.display:
-            self.display_results(args.display)
+            self.display_results(self.args.display)
             exit(0)
         # Start the job via defourm api.
         if self.args.start:
             self.start_job()
-            exit(0)    
+            exit(0)
 
-    def parse_prompts(self):
-        
-        if self.args.prompts is not None and self.args.prompts.__contains__(':'):
-            prompts = self.args.prompts.split(';')
+    def parse_prompts(self) -> None:
+        """Parse prompt keyframes from the CLI argument once."""
+
+        if self.args.prompts is not None and ":" in self.args.prompts:
+            prompts = self.args.prompts.split(";")
 
             for prompt in prompts:
-                keyframe, text = prompt.split(':')
+                keyframe, text = prompt.split(":", maxsplit=1)
                 self.settings["prompts"][keyframe] = text
 
-    def parse_image(self):
+    def parse_image(self) -> None:
         image_path = self.args.init_img
 
         if image_path is not None:
@@ -105,7 +119,7 @@ class DeforumController():
             except Exception as e:
                 print("Error while getting image dimensions:", e)
 
-    def load_settings_from_file(self, file_path):
+    def load_settings_from_file(self, file_path: str) -> None:
         try:
             with open(file_path, 'r') as file:
                 loaded_settings = json.load(file)
@@ -113,18 +127,16 @@ class DeforumController():
                     self.settings[key] = value
         except Exception as e:
             print("Error while loading settings from file:", e)
-    
-    def merge_json_settings(self, json_str):
+
+    def merge_json_settings(self, json_str: str) -> None:
         try:
             loaded_settings = json.loads(json_str)
             for key, value in loaded_settings.items():
                 self.settings[key] = value
         except Exception as e:
             print("Error while merging JSON settings:", e)
-    def find_value (self, name):
-        if (self.settings[name] is not None):
-            return self.settings[name]
-        return None
+    def find_value(self, name: str) -> Optional[Any]:
+        return self.settings.get(name)
     
     def display_results(self, method_name):
         methods_map = {
@@ -140,7 +152,7 @@ class DeforumController():
         else:
             print(f"Method {method_name} not found.")
 
-    def encode_image_to_base64(self):
+    def encode_image_to_base64(self) -> None:
         image_path = self.args.init_img
         
         if image_path:
@@ -151,11 +163,11 @@ class DeforumController():
             except Exception as e:
                 print("Error while encoding image to base64:", e)
 
-    def delete_deforum_job(self, job_id):
+    def delete_deforum_job(self, job_id: str):
         endpoint = f"{self.url}/deforum_api/batches/{job_id}"
         try:
-            res = requests.delete(endpoint)
-            return res.body
+            res = self.session.delete(endpoint)
+            return res.json()
         except Exception as e:
             print("Error while deleting job:", e)
             return None
@@ -164,7 +176,7 @@ class DeforumController():
         Start the job by sending a POST request with settings to the Deforum API.
         """
         payload = {"deforum_settings": self.settings}
-        res = requests.post(url=f'{self.url}/deforum_api/batches', json=payload)
+        res = self.session.post(url=f'{self.url}/deforum_api/batches', json=payload)
         formatted_res = json.dumps(res.json(), indent=4)
         print(formatted_res)
         if res.status_code == 202:
@@ -186,7 +198,7 @@ class DeforumController():
 
         :return: List of batch IDs or None if not found.
         """
-        res = requests.get(url=f'{self.url}/deforum_api/batch') 
+        res = self.session.get(url=f'{self.url}/deforum_api/batch')
         try:
             if (res.json()['detail'] == 'Not Found'):
                 return None
@@ -199,37 +211,37 @@ class DeforumController():
         return batch_ids
 
     def get_deforum_batches(self):
-        res = requests.get(url=f'{self.url}/deforum_api/batch') 
+        res = self.session.get(url=f'{self.url}/deforum_api/batch')
         try:
             if (res.json()['detail'] == 'Not Found'):
                 return None
-        
+
         except Exception as e:
             print("Error while merging JSON settings:", str(e))
             return
 
-            return res.json()
+        return res.json()
         
     def get_deforum_job_ids(self):
-        res = requests.get(url=f'{self.url}/deforum_api/jobs') 
+        res = self.session.get(url=f'{self.url}/deforum_api/jobs')
         try:
             if (res.json()['detail'] == 'Not Found'):
                 return None
-        
+
         except Exception as e:
             print("Error while merging JSON settings:", str(e))
             return
 
-            job_ids = [id for id in res.json()]
-            return job_ids
+        job_ids = [id for id in res.json()]
+        return job_ids
 
     def get_deforum_job(self, id):
-        res = requests.get(url=f'{self.url}/deforum_api/jobs/{id}') 
+        res = self.session.get(url=f'{self.url}/deforum_api/jobs/{id}')
 
         return res.json()
 
     def get_deforum_jobs(self):
-        res = requests.get(url=f'{self.url}/deforum_api/jobs') 
+        res = self.session.get(url=f'{self.url}/deforum_api/jobs')
         response = dict()
 
         r = res.json()

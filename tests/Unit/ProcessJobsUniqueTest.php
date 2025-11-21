@@ -31,7 +31,17 @@ class ProcessJobsUniqueTest extends TestCase
         $job = new ProcessDeforumJob($videoJob, 5);
 
         $this->assertInstanceOf(ShouldBeUnique::class, $job);
-        $this->assertSame('202-5', $job->uniqueId());
+        $this->assertSame('202-5-base', $job->uniqueId());
         $this->assertSame(3600, $job->uniqueFor);
+    }
+
+    public function test_deforum_extension_job_is_unique_per_video_preview_and_source(): void
+    {
+        $videoJob = Videojob::factory()->make(['id' => 303]);
+
+        $job = new ProcessDeforumJob($videoJob, 0, extendFromJobId: 999);
+
+        $this->assertInstanceOf(ShouldBeUnique::class, $job);
+        $this->assertSame('303-0-999', $job->uniqueId());
     }
 }
