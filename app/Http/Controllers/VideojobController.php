@@ -29,6 +29,7 @@ class VideojobController extends Controller
 
         $validated = $request->validate([
             'attachment' => 'required|mimes:webm,mp4,mov,ogg,qt,gif,jpg,jpeg,png,webp|max:200000',
+            'soundtrack' => 'nullable|file|mimes:mp3,aac,wav|max:51200',
             'type' => 'required|in:vid2vid,deforum',
         ]);
 
@@ -54,6 +55,8 @@ class VideojobController extends Controller
         $videoJob->negative_prompt = '';
         $videoJob->queued_at = null;
         $videoJob->status = 'pending';
+
+        $this->attachSoundtrack($videoJob, $request);
 
         $videoJob = $this->videoProcessingService->parseJob($videoJob, $fileInfo['publicPath']);
         $this->persistMedia($videoJob, $fileInfo['path']);
@@ -83,6 +86,8 @@ class VideojobController extends Controller
         $videoJob->prompt = 'skull face, Halloween, (sharp teeth:1.4), (mouth open:1.3), (dark skin:1.2), scull, night, dim light, darkness, looking to the viewer, eyes looking straight,  <lora:LowRA:0.3> <lora:more_details:0.5>';
         $videoJob->negative_prompt = 'bad-picture-chill-75v';
         $videoJob->status = 'pending';
+
+        $this->attachSoundtrack($videoJob, $request);
 
         $videoJob->save();
         $this->persistMedia($videoJob, $fileInfo['path']);
@@ -405,6 +410,35 @@ class VideojobController extends Controller
 
         $videoJob->original_url = $videoJob->getMedia(Videojob::MEDIA_ORIGINAL)->first()?->getFullUrl();
         $videoJob->save();
+    }
+
+    private function attachSoundtrack(Videojob $videoJob, Request $request): void
+    {
+        $soundtrack = $this->persistSoundtrack($request);
+
+        if (! $soundtrack) {
+            return;
+        }
+
+        $videoJob->soundtrack_path = $soundtrack['absolutePath'];
+        $videoJob->soundtrack_url = $soundtrack['url'];
+        $videoJob->soundtrack_mimetype = $soundtrack['mimeType'];
+    }
+
+    private function persistSoundtrack(Request $request): ?array
+    {
+        if (! $request->hasFile('soundtrack')) {
+            return null;
+        }
+
+        $soundtrack = $request->file('soundtrack');
+        $path = $soundtrack->store('soundtracks', 'public');
+
+        return [
+            'absolutePath' => Storage::disk('public')->path($path),
+            'url' => Storage::disk('public')->url($path),
+            'mimeType' => $soundtrack->getMimeType(),
+        ];
     }
 
     private function guardAuthenticated(): ?JsonResponse

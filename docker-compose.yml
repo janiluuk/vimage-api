@@ -21,7 +21,7 @@ services:
       PHP_IDE_CONFIG: serverName=${XDEBUG_STORM_SERVER_NAME}
 
   db:
-    image: arm64v8/mysql:latest
+    image: mysql:8.0
     container_name: laravel-db
     restart: unless-stopped
     ports:
@@ -54,5 +54,5 @@ services:
 #      - 11300:11300
 
   redis:
-    image: arm64v8/redis:7.0.2-alpine
+    image: redis:7.0.2-alpine
     container_name: laravel-redis
