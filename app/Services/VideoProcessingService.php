@@ -210,7 +210,11 @@ class VideoProcessingService
 
                 if ($videoJob->frame_count == 0)
                     $videoJob->frame_count++;
-                
+
+                if (! $isPreview && ! empty($videoJob->soundtrack_path)) {
+                    $this->mergeSoundtrack($videoJob);
+                }
+
                 Log::info("Finished in {" . (time() - $time) . "} seconds :  {$videoJob->frame_count} frames on " . round($videoJob->frame_count / $elapsed) . "  frames/s speed. {output} ", ['output' => $process->getOutput()]);
 
                 $videoJob->attachResults();
@@ -280,6 +284,10 @@ class VideoProcessingService
             'model' => '"' . $modelFile->filename . '"',
             'outfile' => $outFile
         ];
+
+        if (! empty($videoJob->soundtrack_path)) {
+            $params['soundtrack'] = '"' . $videoJob->soundtrack_path . '"';
+        }
         
 
         if (!empty($videoJob->controlnet)) {
@@ -316,6 +324,48 @@ class VideoProcessingService
         ];
 
         return implode(' ', $cmdParts);
+    }
+
+    private function mergeSoundtrack(Videojob $videoJob): void
+    {
+        $soundtrackPath = $videoJob->soundtrack_path;
+        $finishedVideoPath = $videoJob->getFinishedVideoPath();
+
+        if (empty($soundtrackPath) || ! file_exists($soundtrackPath) || ! file_exists($finishedVideoPath)) {
+            Log::warning('Skipping soundtrack merge because audio or video file is missing', [
+                'video_job_id' => $videoJob->id,
+                'soundtrack' => $soundtrackPath,
+                'video' => $finishedVideoPath,
+            ]);
+
+            return;
+        }
+
+        $targetFile = preg_replace('/\.mp4$/', '_soundtrack.mp4', $finishedVideoPath);
+
+        $command = sprintf(
+            'ffmpeg -y -i %s -i %s -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 -shortest %s',
+            escapeshellarg($finishedVideoPath),
+            escapeshellarg($soundtrackPath),
+            escapeshellarg($targetFile)
+        );
+
+        $process = Process::fromShellCommandline($command);
+
+        try {
+            $process->mustRun();
+            rename($targetFile, $finishedVideoPath);
+            $videoJob->audio_codec = 'aac';
+        } catch (ProcessFailedException $exception) {
+            Log::warning('Unable to apply soundtrack to rendered video', [
+                'video_job_id' => $videoJob->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            if (file_exists($targetFile)) {
+                @unlink($targetFile);
+            }
+        }
     }
     public function applyPrompts(Videojob $videoJob)
     {

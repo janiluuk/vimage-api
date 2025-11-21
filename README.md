@@ -1,12 +1,14 @@
 # Vimage Backend API
 
-Laravel 10 API that powers uploads, video production, and marketplace features for the clients.
+Laravel 10 API that powers uploads, video production, AI studio experiences for remixing existing or newly generated material, and GPU resource credit workflows for the clients.
 
 ## What’s inside
 
 - JWT-authenticated APIs with social login and password recovery.
-- Video workflows for vid2vid and Deforum: upload media, submit parameters, extend a run, finalize, and track progress.
-- Catalog and marketplace primitives (categories, products, orders, wallets, finance operations).
+- Video workflows for vid2vid and Deforum: upload media, submit parameters, extend a run, finalize, and track progress (with optional soundtrack uploads for finished videos).
+- Catalog and GPU resource credit primitives (categories, products, orders, wallets, finance operations).
+- Administration endpoints for user management, finance operations, support requests, and content oversight.
+- AI studio flows centered on ingesting existing media and combining it with generated assets to deliver publish-ready content.
 - Messaging, chats, and support tickets.
 
 ## Requirements
@@ -44,7 +46,7 @@ API v2 mirrors these at `/api/v2/*` plus `/api/v2/me`.
 
 ### Video jobs
 
-- `POST /api/upload` — upload source media with `attachment` and `type` of `vid2vid` or `deforum`.
+- `POST /api/upload` — upload source media with `attachment`, optional `soundtrack` (mp3/aac/wav), and `type` of `vid2vid` or `deforum`.
 - `POST /api/submit` — submit vid2vid parameters (`modelId`, `cfgScale`, `prompt`, `frameCount`, `denoising`).
 - `POST /api/submitDeforum` — submit deforum parameters (`modelId`, `prompt`, `preset`, `length`, optional `frameCount`).
 - `POST /api/submitDeforum` with `extendFromJobId` — extend a finished deforum job using its saved settings and last frame as the
@@ -53,9 +55,9 @@ API v2 mirrors these at `/api/v2/*` plus `/api/v2/me`.
 - `POST /api/cancelJob/{videoId}` — cancel a pending job.
 - `GET /api/status/{videoId}` — check job progress.
 
-### Marketplace & messaging
+### GPU resource credits & messaging
 
-- Categories and products: `GET /api/categories`, `GET /api/categories/{id}`, `GET /api/products`, `GET /api/products/{productId}`,
+- Categories and GPU credit products: `GET /api/categories`, `GET /api/categories/{id}`, `GET /api/products`, `GET /api/products/{productId}`,
   plus authenticated CRUD under `/api/products`.
 - Orders and finance: `/api/orders/*`, `/api/user-wallets`, `/api/wallet-types`, `/api/finance-operations`.
 - Chats and messages: `/api/chats/*`, `/api/messages/*` (auth).
@@ -63,8 +65,11 @@ API v2 mirrors these at `/api/v2/*` plus `/api/v2/me`.
 
 ### Administration
 
-Routes under `/api/administration` are protected by `AuthorizationChecker` and `IsAdministratorChecker` for user management and
-financial oversight.
+Routes under `/api/administration` are protected by `AuthorizationChecker` and `IsAdministratorChecker` and power the admin panel. Core areas include:
+
+- User management: list users, reset passwords, and update account details.
+- Finance oversight: review and change finance operation status, review orders, and manage wallet types.
+- Support operations: search and update support requests and associated messages.
 
 ## Common tooling
 
