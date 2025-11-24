@@ -240,8 +240,9 @@ class Videojob extends Model implements HasMedia
         uasort($revisions, function ($a, $b) {
             if ($a['generated_at'] > $b['generated_at']) {
                 return 1;
-            } else
+            } else {
                 return -1;
+            }
         });
         return $revisions;
     }

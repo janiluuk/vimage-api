@@ -304,8 +304,9 @@ class DeforumProcessingService
         foreach ($params as $key => $val) {
             if ($key == 'modelFile') {
                 $cmdString .= sprintf("--%s='%s' ", $key, $val);
-            } else
+            } else {
                 $cmdString .= sprintf('--%s=%s ', $key, $val);
+            }
         }
         $cmdString .= ' --json_settings=\''. $json_param . '\' ';
         $processor = config('app.paths.deforum_processor_path');

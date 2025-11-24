@@ -311,8 +311,9 @@ class VideoProcessingService
         foreach ($params as $key => $val) {
             if ($key == 'prompt' || $key == 'negative_prompt') {
                 $cmdString .= sprintf("--%s=\"%s\" ", $key, $val);
-            } else
-            $cmdString .= sprintf('--%s=%s ', $key, $val);
+            } else {
+                $cmdString .= sprintf('--%s=%s ', $key, $val);
+            }
         }
         
         $processor = config('app.paths.image_processor_path');
