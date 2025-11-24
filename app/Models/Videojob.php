@@ -20,7 +20,7 @@ class Videojob extends Model implements HasMedia
     const STATUS_FINISHED = 'finished';
     const STATUS_PREVIEW = 'preview';
     const STATUS_ERROR = 'error';
-    const STATUS = 'preprocessing';
+    const STATUS_PREPROCESSING = 'preprocessing';
     const STATUS_POST_PROCESSING = 'postprocessing';
     const STATUS_PROCESSING = 'processing';
     const STATUS_PENDING = 'pending';
@@ -72,8 +72,6 @@ class Videojob extends Model implements HasMedia
         'fps',
         'generation_parameters',
         'mimetype',
-        'bitrate',
-        'audio_codec',
         'frame_count',
         'preview_url',
         'preview_animation',
@@ -242,8 +240,9 @@ class Videojob extends Model implements HasMedia
         uasort($revisions, function ($a, $b) {
             if ($a['generated_at'] > $b['generated_at']) {
                 return 1;
-            } else
+            } else {
                 return -1;
+            }
         });
         return $revisions;
     }

@@ -41,12 +41,12 @@ class DeforumProcessingService
         if ($width == $height && $width >= $max_dimension) {
             return [960, 960];
 
-        } else if ($width > $height) {
+        } elseif ($width > $height) {
             while ($width > $max_dimension) {
                 $height = ($height * $max_dimension) / $width;
                 $width = $max_dimension;
             }
-        } else if ($width < $height) {
+        } elseif ($width < $height) {
             while ($height > $max_dimension) {
                 $width = ($width * $max_dimension) / $height;
                 $height = $max_dimension;
@@ -144,7 +144,7 @@ class DeforumProcessingService
                     
                     if ($data['phase'] === 'QUEUED' && $videoJob->status !== "approved") {
                         $videoJob->status = 'approved';
-                    } else if ($data['phase'] == 'GENERATING' && $videoJob->status != "processing") {
+                    } elseif ($data['phase'] == 'GENERATING' && $videoJob->status != "processing") {
                         $videoJob->status = 'processing';
                     }
 
@@ -226,7 +226,7 @@ class DeforumProcessingService
         }
     }
 
-    private function buildCommandLine(VideoJob $videoJob, $sourceFile, $outFile, $previewFrames = 0, ?int $extendFromJobId = null)
+    private function buildCommandLine(Videojob $videoJob, $sourceFile, $outFile, $previewFrames = 0, ?int $extendFromJobId = null)
     {
         if ($previewFrames < 5 && $previewFrames > 0 ) $previewFrames = 5;
 
@@ -236,7 +236,7 @@ class DeforumProcessingService
         $prompts = $this->applyPrompts($videoJob);
 
         $cmdString = '';
-        $json_settings=[];
+        $jsonSettings = [];
 
         $initImg = $this->resolveInitImage($videoJob, $extendFromJobId);
 
@@ -246,15 +246,15 @@ class DeforumProcessingService
             'json_settings_file' => '/www/api/scripts/zoom.json',
         ];
 
-        $json_settings['prompts'] = '{ "0": "' . addslashes($prompts[0]) .  ' --neg ' . addslashes($prompts[1]) . '" }';
-        $json_settings['checkpoint_schedule'] = '"0: (\"' . $modelFilename . '\"), 100: (\"' . $modelFilename . '\")"';
-        $json_settings['max_frames'] =  $previewFrames > 0 ? $previewFrames : (int)$videoJob->frame_count;
-        $json_settings['sd_model_hash'] = isset($file[1]) ? '"' . str_replace("]", "", $file[1]) . '"' : '""';
-        $json_settings['sd_model_name'] = '"' .trim($file[0]) . '"';
-        $json_settings['positive_prompts'] = '"' . addslashes($prompts[0]) . '"';
-        $json_settings['negative_prompts'] = '"' . addslashes($prompts[1]) . '"';
-        $json_settings['W'] = $videoJob->width > 0 ? $videoJob->width : 540;
-        $json_settings['H'] = $videoJob->height > 0 ? $videoJob->height : 960;
+        $jsonSettings['prompts'] = '{ "0": "' . addslashes($prompts[0]) .  ' --neg ' . addslashes($prompts[1]) . '" }';
+        $jsonSettings['checkpoint_schedule'] = '"0: (\"' . $modelFilename . '\"), 100: (\"' . $modelFilename . '\")"';
+        $jsonSettings['max_frames'] =  $previewFrames > 0 ? $previewFrames : (int)$videoJob->frame_count;
+        $jsonSettings['sd_model_hash'] = isset($file[1]) ? '"' . str_replace("]", "", $file[1]) . '"' : '""';
+        $jsonSettings['sd_model_name'] = '"' .trim($file[0]) . '"';
+        $jsonSettings['positive_prompts'] = '"' . addslashes($prompts[0]) . '"';
+        $jsonSettings['negative_prompts'] = '"' . addslashes($prompts[1]) . '"';
+        $jsonSettings['W'] = $videoJob->width > 0 ? $videoJob->width : 540;
+        $jsonSettings['H'] = $videoJob->height > 0 ? $videoJob->height : 960;
 
 
         $normalizedSettings = [
@@ -263,7 +263,7 @@ class DeforumProcessingService
                 'negative' => $prompts[1],
             ],
             'checkpoint_schedule' => $modelFilename,
-            'max_frames' => $json_settings['max_frames'],
+            'max_frames' => $jsonSettings['max_frames'],
             'sd_model_hash' => isset($file[1]) ? str_replace("]", "", $file[1]) : '',
             'sd_model_name' => trim($file[0]),
             'dimensions' => [
@@ -275,7 +275,7 @@ class DeforumProcessingService
         $videoJob->generation_parameters = json_encode([
             'model_id' => $videoJob->model_id,
             'prompts' => $normalizedSettings['prompts'],
-            'frame_count' => $json_settings['max_frames'],
+            'frame_count' => $jsonSettings['max_frames'],
             'sd_model_hash' => $normalizedSettings['sd_model_hash'],
             'sd_model_name' => $normalizedSettings['sd_model_name'],
             'dimensions' => $normalizedSettings['dimensions'],
@@ -289,11 +289,11 @@ class DeforumProcessingService
         ]);
         $videoJob->revision = md5($videoJob->generation_parameters);
 
-        //$json_settings['skip_video_creation'] = $previewFrames > 0 ? 'true' : 'false';
+        //$jsonSettings['skip_video_creation'] = $previewFrames > 0 ? 'true' : 'false';
 
         $json_param = '{';
         $comma = '';
-        foreach ($json_settings as $key  => $val) {
+        foreach ($jsonSettings as $key  => $val) {
             $json_param .= $comma . ' "' . $key . '": ' . $val;
             $comma = ',';
         }
@@ -304,8 +304,9 @@ class DeforumProcessingService
         foreach ($params as $key => $val) {
             if ($key == 'modelFile') {
                 $cmdString .= sprintf("--%s='%s' ", $key, $val);
-            } else
+            } else {
                 $cmdString .= sprintf('--%s=%s ', $key, $val);
+            }
         }
         $cmdString .= ' --json_settings=\''. $json_param . '\' ';
         $processor = config('app.paths.deforum_processor_path');
