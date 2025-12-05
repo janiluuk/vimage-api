@@ -19,10 +19,10 @@ class VideoProcessingService
     private $ffmpeg;
     private $ffprobe;
 
-    public function __construct()
+    public function __construct(?FFMpegOg $ffmpeg = null, ?FFProbe $ffprobe = null)
     {
         /* @var \FFMpeg\FFMpeg FFMpegOg */
-        $this->ffmpeg = FFMpegOg::create(
+        $this->ffmpeg = $ffmpeg ?? FFMpegOg::create(
             [
                 'ffmpeg.binaries' => '/usr/bin/ffmpeg',
                 // Path to the FFMpeg binary
@@ -33,7 +33,7 @@ class VideoProcessingService
             ]
         );
 
-        $this->ffprobe = FFProbe::create(
+        $this->ffprobe = $ffprobe ?? FFProbe::create(
             [
                 'ffmpeg.binaries' => '/usr/bin/ffmpeg',
                 // Path to the FFMpeg binary
@@ -109,9 +109,7 @@ class VideoProcessingService
 
             $codec = $videoStream->get('codec_name');
             $bitrate = $videoStream->get('bit_rate');
-            $fps = 0;
-            eval("\$fps = {$frameRate};");
-            $fps = (float) $fps;
+            $fps = $this->parseFrameRate($frameRate);
             $size = filesize($path);
 
             $framesCount = $format->get('nb_frames');
@@ -403,18 +401,25 @@ class VideoProcessingService
     public function killProcess($sessionId)
     {
         try {
-            $pids = false;
+            $pids = [];
 
-            exec('ps aux | grep -i video2video | grep -i \"\-\-jobid=' . $sessionId . '\" | grep -v grep', $pids);
+            $search = sprintf('--jobid=%s', $sessionId);
+            exec(sprintf('ps -eo pid,command | grep -i video2video | grep -F "%s" | grep -v grep', $search), $pids);
 
-            if (empty($pids) || count($pids) < 1) {
+            if (empty($pids)) {
                 return;
-            } else {
+            }
 
-                Log::info("Killing process {$sessionId}", ['pids' => $pids]);
-                $command = sprintf("kill -9 %s", $pids[0]);
-                $process = \Illuminate\Support\Facades\Process::run($command);
-                Log::info($process->output());
+            foreach ($pids as $rawProcess) {
+                [$pid] = preg_split('/\s+/', trim($rawProcess), 2);
+
+                if (! is_numeric($pid)) {
+                    continue;
+                }
+
+                Log::info("Killing process {$sessionId}", ['pid' => $pid]);
+                $process = new Process(['kill', '-9', (int) $pid]);
+                $process->mustRun();
             }
         } catch (ProcessFailedException $exception) {
             throw new \Exception($exception->getMessage());
@@ -443,5 +448,22 @@ class VideoProcessingService
         }
 
         return $argStrings;
+    }
+
+    private function parseFrameRate($frameRate): float
+    {
+        if (is_numeric($frameRate)) {
+            return (float) $frameRate;
+        }
+
+        if (is_string($frameRate) && str_contains($frameRate, '/')) {
+            [$numerator, $denominator] = array_pad(explode('/', $frameRate, 2), 2, 0);
+
+            if ($denominator > 0) {
+                return (float) $numerator / (float) $denominator;
+            }
+        }
+
+        return 0.0;
     }
 }
