@@ -14,8 +14,12 @@ return new class extends Migration
     public function up()
     {
         Schema::table('categories', function (Blueprint $table) {
-            $table->string('main_image')->nullable();
-            $table->string('second_image')->nullable();
+            if (!Schema::hasColumn('categories', 'main_image')) {
+                $table->string('main_image')->nullable();
+            }
+            if (!Schema::hasColumn('categories', 'second_image')) {
+                $table->string('second_image')->nullable();
+            }
         });
     }
 
