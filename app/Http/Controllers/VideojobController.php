@@ -248,7 +248,8 @@ private function generateDeforum(Request $request): JsonResponse
             // Use last frame of base job as init image for extension
             if (!empty($baseJob->last_frame_path) && file_exists($baseJob->last_frame_path)) {
                 // Copy the last frame to use as the new job's original video
-                $targetPath = public_path('videos/' . $videoJob->id . '_extend_init.png');
+                $videosPath = config('app.paths.videos', 'videos');
+                $targetPath = public_path($videosPath . '/' . $videoJob->id . '_extend_init.png');
                 copy($baseJob->last_frame_path, $targetPath);
                 Log::info('Using last frame from base job as init image', [
                     'base_job_id' => $baseJob->id,

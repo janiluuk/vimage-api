@@ -312,7 +312,8 @@ class Videojob extends Model implements HasMedia
 
     public function getOriginalVideoPath(): string
     {
-        return public_path('videos/' . $this->filename);
+        $videosPath = config('app.paths.videos', 'videos');
+        return public_path($videosPath . '/' . $this->filename);
     }
 
     public function getFinishedVideoPath(): string
