@@ -213,6 +213,21 @@ class DeforumProcessingService
                 if ($videoJob->frame_count == 0)
                     $videoJob->frame_count++;
 
+                // Extract first and last frames after successful processing
+                if ($previewFrames == 0 && file_exists($videoJob->getFinishedVideoPath())) {
+                    $frameExtractor = app(\App\Services\VideoJobs\FrameExtractor::class);
+                    $frameExtractor->extractAndSaveFrames($videoJob, $videoJob->getFinishedVideoPath());
+
+                    // If this is an extended job, stitch it with the base job's video
+                    if ($extendFromJobId !== null) {
+                        $baseJob = Videojob::find($extendFromJobId);
+                        if ($baseJob && file_exists($baseJob->getFinishedVideoPath())) {
+                            $videoStitcher = app(\App\Services\VideoJobs\VideoStitcher::class);
+                            $videoStitcher->stitchExtendedJob($baseJob, $videoJob);
+                        }
+                    }
+                }
+
                 Log::info("Finished in {" . (time() - $time) . "} seconds :  {$videoJob->frame_count} frames on " . round($videoJob->frame_count / $elapsed) . "  frames/s speed. {output} ", ['output' => $process->getOutput()]);
 
 
@@ -389,6 +404,12 @@ class DeforumProcessingService
             return $videoJob->getOriginalVideoPath();
         }
 
+        // If source job already has a last frame saved, use it
+        if (!empty($sourceJob->last_frame_path) && file_exists($sourceJob->last_frame_path)) {
+            return $sourceJob->last_frame_path;
+        }
+
+        // Otherwise, extract the last frame from the source video
         $sourcePath = $sourceJob->hasFinishedVideo() ? $sourceJob->getFinishedVideoPath() : $sourceJob->getOriginalVideoPath();
 
         if (! file_exists($sourcePath)) {
@@ -398,26 +419,19 @@ class DeforumProcessingService
         $targetDir = dirname($videoJob->getOriginalVideoPath());
         $initFramePath = sprintf('%s/%s_extend_init.png', $targetDir, $videoJob->id);
 
-        try {
-            $command = sprintf(
-                'ffmpeg -y -sseof -1 -i %s -vframes 1 %s',
-                escapeshellarg($sourcePath),
-                escapeshellarg($initFramePath)
-            );
+        $frameExtractor = app(\App\Services\VideoJobs\FrameExtractor::class);
+        $success = $frameExtractor->extractLastFrame($sourcePath, $initFramePath);
 
-            $process = Process::fromShellCommandline($command);
-            $process->mustRun();
-
+        if ($success && file_exists($initFramePath)) {
             return $initFramePath;
-        } catch (ProcessFailedException $exception) {
-            Log::warning('Failed to extract last frame for init image, falling back to original', [
-                'video_job_id' => $videoJob->id,
-                'source_job' => $extendFromJobId,
-                'error' => $exception->getMessage(),
-            ]);
-
-            return $videoJob->getOriginalVideoPath();
         }
+
+        Log::warning('Failed to extract last frame for init image, falling back to original', [
+            'video_job_id' => $videoJob->id,
+            'source_job' => $extendFromJobId,
+        ]);
+
+        return $videoJob->getOriginalVideoPath();
     }
     public function applyPrompts(Videojob $videoJob)
     {

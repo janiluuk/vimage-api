@@ -148,28 +148,33 @@ private function generateDeforum(Request $request): JsonResponse
 
             $persistedParameters = json_decode((string) $baseJob->generation_parameters, true) ?? [];
 
-            // Set defaults from base job (these will be overridden if provided in request)
+            // When extending, inherit model_id from base job (not overridable)
             $videoJob->model_id = $persistedParameters['model_id'] ?? $baseJob->model_id;
-            $videoJob->prompt = $persistedParameters['prompts']['positive'] ?? $baseJob->prompt;
-            $videoJob->negative_prompt = $persistedParameters['prompts']['negative'] ?? $baseJob->negative_prompt;
-            $videoJob->seed = $persistedParameters['seed'] ?? $baseJob->seed;
-            $videoJob->denoising = $persistedParameters['denoising'] ?? $baseJob->denoising;
+            
+            // These parameters can be overridden by request
+            $videoJob->prompt = $request->input('prompt', $persistedParameters['prompts']['positive'] ?? $baseJob->prompt);
+            $videoJob->negative_prompt = $request->input('negative_prompt', $persistedParameters['prompts']['negative'] ?? $baseJob->negative_prompt);
+            $videoJob->length = $request->input('length', $persistedParameters['length'] ?? $baseJob->length);
+            
+            // These parameters come from base job only
+            $videoJob->seed = $request->input('seed', $persistedParameters['seed'] ?? $baseJob->seed);
+            $videoJob->denoising = $request->input('denoising', $persistedParameters['denoising'] ?? $baseJob->denoising);
             $videoJob->fps = $persistedParameters['fps'] ?? $baseJob->fps;
             $videoJob->frame_count = $persistedParameters['frame_count'] ?? $baseJob->frame_count;
-            $videoJob->length = $persistedParameters['length'] ?? $baseJob->length;
+            $videoJob->width = $baseJob->width;
+            $videoJob->height = $baseJob->height;
+        } else {
+            $videoJob->model_id = $request->input('modelId', $videoJob->model_id);
+            $videoJob->prompt = trim((string) $request->input('prompt', $videoJob->prompt));
+            $videoJob->negative_prompt = trim((string) $request->input('negative_prompt', $videoJob->negative_prompt));
+            $videoJob->length = $request->input('length', $videoJob->length ?? 4);
+            $videoJob->denoising = $request->input('denoising', $videoJob->denoising);
         }
 
         if ($response = $this->assertOwner($videoJob)) {
             return $response;
         }
 
-        // When extending, keep base job's model_id; otherwise use request value
-        if (!$extendFromJobId) {
-            $videoJob->model_id = $request->input('modelId', $videoJob->model_id);
-        }
-        // else: extending - keep the model_id from base job (already set above at line 152)
-        $videoJob->prompt = trim((string) $request->input('prompt', $videoJob->prompt));
-        $videoJob->negative_prompt = trim((string) $request->input('negative_prompt', $videoJob->negative_prompt));
         $videoJob->status = 'processing';
         $videoJob->progress = 5;
         $seed = $this->normalizeSeed((int) $request->input('seed', $videoJob->seed ?? -1));
@@ -177,11 +182,9 @@ private function generateDeforum(Request $request): JsonResponse
         $videoJob->fps = $videoJob->fps ?? 24;
         $videoJob->generator = 'deforum';
         $videoJob->seed = $seed;
-        $videoJob->length = $request->input('length', $videoJob->length ?? 4);
         $videoJob->frame_count = round($videoJob->length * $videoJob->fps);
         $videoJob->job_time = 3;
         $videoJob->estimated_time_left = ($videoJob->frame_count * 6) + 6;
-        $videoJob->denoising = $request->input('denoising', $videoJob->denoising);
         $videoJob->queued_at = Carbon::now();
         $videoJob->save();
 
@@ -220,6 +223,7 @@ private function generateDeforum(Request $request): JsonResponse
             'seed' => 'nullable|integer',
             'negative_prompt' => 'nullable|string',
             'controlnet' => 'nullable|array',
+            'extendFromJobId' => 'nullable|integer|exists:video_jobs,id',
         ]);
 
         $seed = $this->normalizeSeed((int) $request->input('seed', -1));
@@ -231,6 +235,66 @@ private function generateDeforum(Request $request): JsonResponse
             return $response;
         }
 
+        // Handle job extension
+        $extendFromJobId = $request->input('extendFromJobId');
+        if ($extendFromJobId) {
+            $baseJob = Videojob::findOrFail($extendFromJobId);
+
+            if ($baseJob->generator === 'deforum') {
+                return response()->json(['message' => 'Cannot extend deforum jobs with vid2vid'], 422);
+            }
+
+            if ($response = $this->assertOwner($baseJob)) {
+                return $response;
+            }
+
+            // Use last frame of base job as init image for extension
+            if (!empty($baseJob->last_frame_path) && file_exists($baseJob->last_frame_path)) {
+                // Copy the last frame to use as the new job's original video
+                $videosPath = config('app.paths.videos', 'videos');
+                $targetPath = public_path($videosPath . '/' . $videoJob->id . '_extend_init.png');
+                
+                // Ensure directory exists
+                $targetDir = dirname($targetPath);
+                if (!is_dir($targetDir)) {
+                    mkdir($targetDir, 0755, true);
+                }
+                
+                if (copy($baseJob->last_frame_path, $targetPath)) {
+                    Log::info('Using last frame from base job as init image', [
+                        'base_job_id' => $baseJob->id,
+                        'last_frame' => $baseJob->last_frame_path,
+                        'target_path' => $targetPath,
+                    ]);
+                } else {
+                    Log::warning('Failed to copy last frame for init image', [
+                        'base_job_id' => $baseJob->id,
+                        'last_frame' => $baseJob->last_frame_path,
+                        'target_path' => $targetPath,
+                    ]);
+                }
+            }
+
+            $persistedParameters = json_decode((string) $baseJob->generation_parameters, true) ?? [];
+
+            // Set defaults from base job (these will be overridden if provided in request)
+            $videoJob->model_id = $request->input('modelId', $persistedParameters['model_id'] ?? $baseJob->model_id);
+            $videoJob->cfg_scale = $request->input('cfgScale', $persistedParameters['cfg_scale'] ?? $baseJob->cfg_scale);
+            $videoJob->denoising = $request->input('denoising', $persistedParameters['denoising_strength'] ?? $baseJob->denoising);
+            $videoJob->prompt = $request->input('prompt', $persistedParameters['prompt'] ?? $baseJob->prompt);
+            $videoJob->negative_prompt = $request->input('negative_prompt', $persistedParameters['negative_prompt'] ?? $baseJob->negative_prompt);
+            $videoJob->seed = $request->input('seed', $persistedParameters['seed'] ?? $baseJob->seed);
+            $videoJob->fps = $persistedParameters['fps'] ?? $baseJob->fps;
+            $videoJob->width = $baseJob->width;
+            $videoJob->height = $baseJob->height;
+        } else {
+            $videoJob->model_id = $request->input('modelId');
+            $videoJob->cfg_scale = $request->input('cfgScale');
+            $videoJob->denoising = $request->input('denoising');
+            $videoJob->prompt = trim((string) $request->input('prompt'));
+            $videoJob->negative_prompt = trim((string) $request->input('negative_prompt', ''));
+        }
+
         $controlnet = $request->input('controlnet', []);
 
         if (! empty($controlnet)) {
@@ -238,16 +302,11 @@ private function generateDeforum(Request $request): JsonResponse
             Log::info('Got controlnet params: ' . json_encode($controlnet), ['controlnet' => json_decode($videoJob->controlnet)]);
         }
 
-        $videoJob->model_id = $request->input('modelId');
-        $videoJob->prompt = trim((string) $request->input('prompt'));
-        $videoJob->negative_prompt = trim((string) $request->input('negative_prompt', ''));
-        $videoJob->cfg_scale = $request->input('cfgScale');
         $videoJob->seed = $seed;
         $videoJob->status = 'processing';
         $videoJob->progress = 5;
         $videoJob->job_time = 3;
         $videoJob->estimated_time_left = ($frameCount * 6) + 6;
-        $videoJob->denoising = $request->input('denoising');
         $videoJob->queued_at = Carbon::now();
         $videoJob->save();
 
@@ -255,7 +314,7 @@ private function generateDeforum(Request $request): JsonResponse
             ? $this->resolveQueueName('MEDIUM_PRIORITY_QUEUE', 'medium')
             : $this->resolveQueueName('HIGH_PRIORITY_QUEUE', 'high');
         Log::info("Dispatching job with framecount {$frameCount} to queue {$queueName}");
-        ProcessVideoJob::dispatch($videoJob, $frameCount)->onQueue($queueName);
+        ProcessVideoJob::dispatch($videoJob, $frameCount, $extendFromJobId)->onQueue($queueName);
 
         return response()->json([
             'id' => $videoJob->id,
@@ -302,12 +361,12 @@ private function generateDeforum(Request $request): JsonResponse
         $videoJob->save();
 
         $videoJob->refresh();
-        ProcessDeforumJob::dispatch($videoJob, 0)->onQueue($this->resolveQueueName('LOW_PRIORITY_QUEUE', 'low'));
+        ProcessDeforumJob::dispatch($videoJob, 0, null)->onQueue($this->resolveQueueName('LOW_PRIORITY_QUEUE', 'low'));
     } else {
         $videoJob->resetProgress('approved');
 
         $videoJob->refresh();
-        ProcessVideoJob::dispatch($videoJob, 0)->onQueue($this->resolveQueueName('LOW_PRIORITY_QUEUE', 'low'));
+        ProcessVideoJob::dispatch($videoJob, 0, null)->onQueue($this->resolveQueueName('LOW_PRIORITY_QUEUE', 'low'));
     }
 
     return response()->json([

@@ -157,6 +157,8 @@ return [
     'paths' => [
         'processed' => '/storage/app/processed',
         'preview' => '/storage/app/preview',
+        'frames' => '/storage/app/frames',
+        'videos' => 'videos',
         'processed_public' => env('APP_URL', 'http://localhost') . '/processed',
         'preview_public' => env('APP_URL', 'http://localhost') . '/preview',
         'image_processor_path' => '/opt/bin/video2video.py',
