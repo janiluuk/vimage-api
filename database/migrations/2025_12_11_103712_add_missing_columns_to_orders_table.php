@@ -42,7 +42,7 @@ return new class extends Migration
             
             // Add user_id if it doesn't exist (old migration used user_customer_id)
             if (!Schema::hasColumn('orders', 'user_id')) {
-                $table->foreignId('user_id')->nullable()->after('uuid')->constrained()->cascadeOnUpdate()->cascadeOnDelete();
+                $table->foreignId('user_id')->nullable()->after('uuid');
             }
             
             // Add promo_code_id if it doesn't exist

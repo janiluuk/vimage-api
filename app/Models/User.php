@@ -86,11 +86,17 @@ class User extends Authenticatable implements JWTSubject, HasMedia
         return $this->hasMany(Product::class);
     }
 
-    public function chat()
+    public function chats()
     {
         // Return chats where user is either first or second participant
         return Chat::where('first_user_id', $this->id)
             ->orWhere('second_user_id', $this->id);
+    }
+    
+    // Alias for backwards compatibility
+    public function chat()
+    {
+        return $this->chats();
     }
 
     public function messages(): HasMany

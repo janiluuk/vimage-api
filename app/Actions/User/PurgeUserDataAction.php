@@ -45,7 +45,12 @@ final class PurgeUserDataAction
             $user->videoJobs()->forceDelete();
             $user->items()->forceDelete();
             $user->messages()->forceDelete();
-            $user->chat()->forceDelete();
+            
+            // For chats, we need to delete each one individually since chat() returns a query builder
+            $user->chat()->get()->each(function ($chat) {
+                $chat->forceDelete();
+            });
+            
             $user->orders()->forceDelete();
             $user->financeOperations()->forceDelete();
             $user->supportRequests()->forceDelete();
