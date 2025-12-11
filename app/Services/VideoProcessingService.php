@@ -172,12 +172,12 @@ class VideoProcessingService
 
         if ($width == $height && $width >= $max_dimension) {
             return [500, 500];
-        } else if ($width > $height) {
+        } elseif ($width > $height) {
             while ($width > $max_dimension) {
                 $height = ($height * $max_dimension) / $width;
                 $width = $max_dimension;
             }
-        } else if ($width < $height) {
+        } elseif ($width < $height) {
             while ($height > $max_dimension) {
                 $width = ($width * $max_dimension) / $height;
                 $height = $max_dimension;
@@ -241,7 +241,7 @@ class VideoProcessingService
             throw new \Exception($e->getMessage());
         }
     }
-    private function buildPreviewParameters(VideoJob $videoJob, $previewFrames = 0): array
+    private function buildPreviewParameters(Videojob $videoJob, $previewFrames = 0): array
     {
         $params = [];
         if ($previewFrames > 0) {
@@ -261,7 +261,7 @@ class VideoProcessingService
         return $params;
     }
 
-    private function buildCommandLine(VideoJob $videoJob, $sourceFile, $outFile, $previewFrames = 0)
+    private function buildCommandLine(Videojob $videoJob, $sourceFile, $outFile, $previewFrames = 0)
     {
 
         $modelFile = ModelFile::find($videoJob->model_id);
@@ -309,8 +309,9 @@ class VideoProcessingService
         foreach ($params as $key => $val) {
             if ($key == 'prompt' || $key == 'negative_prompt') {
                 $cmdString .= sprintf("--%s=\"%s\" ", $key, $val);
-            } else
-            $cmdString .= sprintf('--%s=%s ', $key, $val);
+            } else {
+                $cmdString .= sprintf('--%s=%s ', $key, $val);
+            }
         }
         
         $processor = config('app.paths.image_processor_path');
