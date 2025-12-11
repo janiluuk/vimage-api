@@ -93,7 +93,7 @@ class User extends Authenticatable implements JWTSubject, HasMedia
 
     public function messages(): HasMany
     {
-        return $this->hasMany(Message::class);
+        return $this->hasMany(Message::class, 'author_user_id');
     }
 
     public function userRole(): BelongsTo

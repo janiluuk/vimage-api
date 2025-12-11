@@ -48,6 +48,10 @@ class Handler extends ExceptionHandler
     public function render($request, Throwable $exception): Response
     {
         if ($exception instanceof BaseException) {
+            // Validate that the exception code is a valid HTTP status code (100-599)
+            $code = $exception->getCode();
+            $httpStatusCode = ($code >= 100 && $code <= 599) ? $code : JsonResponse::HTTP_BAD_REQUEST;
+            
             return new JsonResponse(
                 [
                     'error' => [
@@ -55,7 +59,7 @@ class Handler extends ExceptionHandler
                         'code' => $exception->getCode(),
                     ],
                 ],
-                JsonResponse::HTTP_BAD_REQUEST
+                $httpStatusCode
             );
         }
 

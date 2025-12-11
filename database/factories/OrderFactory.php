@@ -22,7 +22,7 @@ class OrderFactory extends Factory
             'uuid' => Str::uuid(),
             'user_id' => User::factory(),
             'promo_code_id' => null,
-            'payment_method' => OrderPaymentConstant::CARD,
+            'payment_method' => OrderPaymentConstant::STRIPE,
             'product_cost' => $productCost,
             'delivery_cost' => $deliveryCost,
             'total_cost' => $productCost + $deliveryCost,

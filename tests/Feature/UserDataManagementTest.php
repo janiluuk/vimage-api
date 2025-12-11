@@ -34,7 +34,7 @@ class UserDataManagementTest extends TestCase
         Product::factory()->count(2)->create(['user_id' => $user->id]);
         Item::factory()->count(3)->create(['user_id' => $user->id]);
 
-        $response = $this->getJson('/api/administration/users');
+        $response = $this->actingAs($user, 'api')->getJson('/api/administration/users');
 
         $response->assertOk();
         $response->assertJsonStructure([
