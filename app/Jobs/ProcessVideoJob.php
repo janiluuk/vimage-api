@@ -62,8 +62,8 @@ class ProcessVideoJob implements ShouldQueue, ShouldBeUnique
                 'max_allowed' => $maxConcurrentJobs
             ]);
 
-            // Release the job back to the queue with delay
-            $this->release(30);
+            // Release with shorter delay for better responsiveness
+            $this->release(10);
             return;
         }
         if ($this->videoJob) {

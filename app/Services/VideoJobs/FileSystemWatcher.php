@@ -134,7 +134,7 @@ class FileSystemWatcher
 
         // Check if file size is stable (not growing)
         $size1 = filesize($file);
-        sleep(1);
+        usleep(100000); // 100ms delay instead of 1 second for better performance
         clearstatcache(true, $file);
         $size2 = filesize($file);
 

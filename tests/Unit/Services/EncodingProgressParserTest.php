@@ -96,10 +96,11 @@ class EncodingProgressParserTest extends TestCase
     {
         $parser = new EncodingProgressParser(1000);
         
-        // Very low progress should still calculate
+        // 5% progress in 10 seconds: estimated total = (10 / 5) * 100 = 200 seconds
+        // Remaining = 200 - 10 = 190 seconds
         $eta = $parser->calculateETA(5.0, 10);
         
-        $this->assertEquals(190, $eta); // (10 / 0.05) * 1 - 10
+        $this->assertEquals(190, $eta);
     }
 
     public function test_has_significant_change_detects_changes()

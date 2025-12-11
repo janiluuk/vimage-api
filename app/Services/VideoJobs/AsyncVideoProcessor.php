@@ -192,8 +192,9 @@ class AsyncVideoProcessor
         $startTime = time();
         $outputPath = $videoJob->getFinishedVideoPath();
 
-        // Start the encoding process in background
-        $process = Process::fromShellCommandline($command . ' > /dev/null 2>&1 &');
+        // Start the encoding process in background (Process::start() is already async)
+        $process = Process::fromShellCommandline($command);
+        $process->setTimeout($timeout);
         $process->start();
 
         try {

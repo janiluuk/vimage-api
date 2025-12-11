@@ -130,7 +130,7 @@ class EncodingProgressParser
      */
     private function calculateProgress(int $frame): float
     {
-        if ($this->totalFrames <= 0) {
+        if ($this->totalFrames <= 0 || $frame <= 0) {
             return 0.0;
         }
 
