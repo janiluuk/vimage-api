@@ -189,7 +189,7 @@ class VideoProcessingService
         return [$width, $height];
     }
 
-    public function startProcess(Videojob $videoJob, $previewFrames = 0)
+    public function startProcess(Videojob $videoJob, $previewFrames = 0, ?int $extendFromJobId = null)
     {
         $isPreview = $previewFrames > 0;
 
@@ -203,7 +203,7 @@ class VideoProcessingService
             $useAsyncProcessing = config('app.video_processing.use_async', false);
             
             if ($useAsyncProcessing && $videoJob->frame_count > 0) {
-                return $this->processWithAsyncTracking($videoJob, $cmd, $isPreview);
+                return $this->processWithAsyncTracking($videoJob, $cmd, $isPreview, $extendFromJobId);
             }
             
             // Fallback to synchronous processing
@@ -229,6 +229,21 @@ class VideoProcessingService
                 $videoJob->attachResults();
                 $videoJob->save();
                 $videoJob->refresh();
+
+                // Extract first and last frames after successful processing
+                if (!$isPreview && file_exists($videoJob->getFinishedVideoPath())) {
+                    $frameExtractor = app(\App\Services\VideoJobs\FrameExtractor::class);
+                    $frameExtractor->extractAndSaveFrames($videoJob, $videoJob->getFinishedVideoPath());
+
+                    // If this is an extended job, stitch it with the base job's video
+                    if ($extendFromJobId !== null) {
+                        $baseJob = Videojob::find($extendFromJobId);
+                        if ($baseJob && file_exists($baseJob->getFinishedVideoPath())) {
+                            $videoStitcher = app(\App\Services\VideoJobs\VideoStitcher::class);
+                            $videoStitcher->stitchExtendedJob($baseJob, $videoJob);
+                        }
+                    }
+                }
 
                 Log::info("Paths: ", ['preview' => $videoJob->getMediaFilesForRevision('image'), 'animation' => $videoJob->getMediaFilesForRevision('animation'), 'finished_video' => $videoJob->getMediaFilesForRevision('video', 'finished')]);
                 
@@ -256,7 +271,7 @@ class VideoProcessingService
     /**
      * Process video with async progress tracking
      */
-    private function processWithAsyncTracking(Videojob $videoJob, string $cmd, bool $isPreview)
+    private function processWithAsyncTracking(Videojob $videoJob, string $cmd, bool $isPreview, ?int $extendFromJobId = null)
     {
         Log::info("Using async processing with progress tracking", ['job_id' => $videoJob->id]);
         
@@ -280,6 +295,21 @@ class VideoProcessingService
                 $videoJob->attachResults();
                 $videoJob->save();
                 $videoJob->refresh();
+
+                // Extract first and last frames after successful processing
+                if (!$isPreview && file_exists($videoJob->getFinishedVideoPath())) {
+                    $frameExtractor = app(\App\Services\VideoJobs\FrameExtractor::class);
+                    $frameExtractor->extractAndSaveFrames($videoJob, $videoJob->getFinishedVideoPath());
+
+                    // If this is an extended job, stitch it with the base job's video
+                    if ($extendFromJobId !== null) {
+                        $baseJob = Videojob::find($extendFromJobId);
+                        if ($baseJob && file_exists($baseJob->getFinishedVideoPath())) {
+                            $videoStitcher = app(\App\Services\VideoJobs\VideoStitcher::class);
+                            $videoStitcher->stitchExtendedJob($baseJob, $videoJob);
+                        }
+                    }
+                }
 
                 Log::info("Paths: ", [
                     'preview' => $videoJob->getMediaFilesForRevision('image'), 

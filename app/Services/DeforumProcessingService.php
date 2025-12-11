@@ -213,6 +213,21 @@ class DeforumProcessingService
                 if ($videoJob->frame_count == 0)
                     $videoJob->frame_count++;
 
+                // Extract first and last frames after successful processing
+                if ($previewFrames == 0 && file_exists($videoJob->getFinishedVideoPath())) {
+                    $frameExtractor = app(\App\Services\VideoJobs\FrameExtractor::class);
+                    $frameExtractor->extractAndSaveFrames($videoJob, $videoJob->getFinishedVideoPath());
+
+                    // If this is an extended job, stitch it with the base job's video
+                    if ($extendFromJobId !== null) {
+                        $baseJob = Videojob::find($extendFromJobId);
+                        if ($baseJob && file_exists($baseJob->getFinishedVideoPath())) {
+                            $videoStitcher = app(\App\Services\VideoJobs\VideoStitcher::class);
+                            $videoStitcher->stitchExtendedJob($baseJob, $videoJob);
+                        }
+                    }
+                }
+
                 Log::info("Finished in {" . (time() - $time) . "} seconds :  {$videoJob->frame_count} frames on " . round($videoJob->frame_count / $elapsed) . "  frames/s speed. {output} ", ['output' => $process->getOutput()]);
 
 

@@ -25,14 +25,14 @@ class ProcessVideoJob implements ShouldQueue, ShouldBeUnique
     public $uniqueFor = 3600;
     const MAX_RETRIES = 5;
 
-    public function __construct(public Videojob $videoJob, public int $previewFrames = 0)
+    public function __construct(public Videojob $videoJob, public int $previewFrames = 0, public ?int $extendFromJobId = null)
     {
 
     }
 
     public function uniqueId(): string
     {
-        return $this->videoJob->id . '-' . $this->previewFrames;
+        return $this->videoJob->id . '-' . $this->previewFrames . '-' . ($this->extendFromJobId ?? 'base');
     }
 
     /**
@@ -98,9 +98,10 @@ class ProcessVideoJob implements ShouldQueue, ShouldBeUnique
                     'job_id' => $videoJob->id,
                     'preview_frames' => $this->previewFrames,
                     'target_file' => $targetFile,
+                    'extend_from_job_id' => $this->extendFromJobId,
                 ]);
 
-                $service->startProcess($videoJob, $this->previewFrames);
+                $service->startProcess($videoJob, $this->previewFrames, $this->extendFromJobId);
 
                 // Release lock on successful completion
                 \Cache::forget($this->getProcessingLockKey($videoJob->id));

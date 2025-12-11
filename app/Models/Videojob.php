@@ -89,6 +89,8 @@ class Videojob extends Model implements HasMedia
         'status',
         'thumbnail',
         'url',
+        'first_frame_path',
+        'last_frame_path',
     ];
     protected $dates = ['queued_at'];
     public function verifyAndCleanPreviews()
@@ -330,6 +332,25 @@ class Videojob extends Model implements HasMedia
         $previewPath = config('app.paths.preview');
         return sprintf('%s/%s', $previewPath, basename($this->preview_img));
     }
+
+    public function getFirstFramePath(): string
+    {
+        if (empty($this->first_frame_path)) {
+            $framesPath = config('app.paths.frames', public_path('frames'));
+            return sprintf('%s/%s_first_frame.png', $framesPath, $this->id);
+        }
+        return $this->first_frame_path;
+    }
+
+    public function getLastFramePath(): string
+    {
+        if (empty($this->last_frame_path)) {
+            $framesPath = config('app.paths.frames', public_path('frames'));
+            return sprintf('%s/%s_last_frame.png', $framesPath, $this->id);
+        }
+        return $this->last_frame_path;
+    }
+
     private function filterFilename($file): ?string
     {
         if (empty($file))
