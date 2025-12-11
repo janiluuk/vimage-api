@@ -139,6 +139,8 @@ Route::prefix('/administration')->group(function () {
         Route::get('/orders', [OrderController::class, 'getAllOrders']);
         Route::patch('/orders/change-order-status', [OrderController::class, 'changeOrderStatus']);
         Route::patch('/change-password', [UserController::class, 'changePassword']);
+        Route::get('/users/{userId}/data-stats', [UserController::class, 'getUserDataStats']);
+        Route::delete('/users/purge-data', [UserController::class, 'purgeUserData']);
         
         // SD Instance management routes
         Route::get('/sd-instances', [SdInstanceController::class, 'index']);

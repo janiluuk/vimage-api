@@ -10,7 +10,7 @@ use App\Http\Presenters\CollectionAsArrayPresenterInterface;
 
 final class UserArrayPresenter implements CollectionAsArrayPresenterInterface
 {
-    public function present(User $user): array
+    public function present(User $user, bool $includeDataStats = false): array
     {
         $roles = [];
         $role = $user->roles()->first();
@@ -18,7 +18,7 @@ final class UserArrayPresenter implements CollectionAsArrayPresenterInterface
             $roles[] = $role->name;
         }
 
-        return [
+        $data = [
             'id' => $user->getId(),
             'email' => $user->getEmail(),
             'login' => $user->getLogin(),
@@ -33,6 +33,12 @@ final class UserArrayPresenter implements CollectionAsArrayPresenterInterface
             'passwordResetAdmin' => $user->getPasswordResetAdmin(),
             'createdAt' => $user->getCreatedAt(),
         ];
+
+        if ($includeDataStats) {
+            $data['data_stats'] = $user->getDataStats();
+        }
+
+        return $data;
     }
 
     public function presentCollection(Collection $collection): array

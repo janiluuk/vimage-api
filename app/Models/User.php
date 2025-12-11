@@ -208,6 +208,57 @@ class User extends Authenticatable implements JWTSubject, HasMedia
     {
         return $this->hasMany(Videojob::class);
     }
+
+    /**
+     * A User has many orders
+     *
+     * @return HasMany
+     */
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    /**
+     * A User has many finance operations
+     *
+     * @return HasMany
+     */
+    public function financeOperations()
+    {
+        return $this->hasMany(FinanceOperationsHistory::class);
+    }
+
+    /**
+     * A User has many support requests
+     *
+     * @return HasMany
+     */
+    public function supportRequests()
+    {
+        return $this->hasMany(SupportRequest::class, 'author_id');
+    }
+
+    /**
+     * Get data statistics for the user
+     *
+     * @return array
+     */
+    public function getDataStats(): array
+    {
+        return [
+            'products_count' => $this->products()->count(),
+            'video_jobs_count' => $this->videoJobs()->count(),
+            'items_count' => $this->items()->count(),
+            'messages_count' => $this->messages()->count(),
+            'chats_count' => $this->chat()->count(),
+            'orders_count' => $this->orders()->count(),
+            'finance_operations_count' => $this->financeOperations()->count(),
+            'support_requests_count' => $this->supportRequests()->count(),
+            'media_count' => $this->getMedia()->count(),
+        ];
+    }
+
     public function sendBindEmail(string $token, string $email)
     {
         $this->notify(new BindEmailNotification($token, $email));

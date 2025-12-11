@@ -23,6 +23,10 @@ use App\Actions\User\ToggleCurrentUserEmailNotificationAction;
 use App\Http\Requests\User\UserChangePasswordValidatorRequest;
 use App\Http\Requests\User\UserChangeUserDataValidatorRequest;
 use App\Http\Requests\User\AdminResetUserPasswordValidatorRequest;
+use App\Actions\User\GetUserDataStatsAction;
+use App\Actions\User\GetUserDataStatsRequest;
+use App\Actions\User\PurgeUserDataAction;
+use App\Actions\User\PurgeUserDataRequest;
 
 class UserController extends ApiController
 {
@@ -33,7 +37,11 @@ class UserController extends ApiController
         $users = $getAllUsersAction
             ->execute()
             ->getResponse();
-        $presenter = $userArrayPresenter->presentCollection($users);
+        
+        // Include data stats in the user list
+        $presenter = $users->map(function ($user) use ($userArrayPresenter) {
+            return $userArrayPresenter->present($user, true);
+        })->all();
 
         return $this->successResponse($presenter);
     }
@@ -134,5 +142,30 @@ class UserController extends ApiController
         $presenter = $userArrayPresenter->present($updatedUser);
 
         return $this->successResponse($presenter);
+    }
+
+    public function getUserDataStats(
+        GetUserDataStatsAction $getUserDataStatsAction,
+        string $userId
+    ): JsonResponse {
+        $stats = $getUserDataStatsAction
+            ->execute(new GetUserDataStatsRequest((int) $userId))
+            ->getResponse();
+
+        return $this->successResponse($stats);
+    }
+
+    public function purgeUserData(
+        PurgeUserDataAction $purgeUserDataAction,
+        Request $request
+    ): JsonResponse {
+        $purgedCounts = $purgeUserDataAction
+            ->execute(new PurgeUserDataRequest($request->input('id')))
+            ->getResponse();
+
+        return $this->successResponse([
+            'msg' => 'User data purged successfully',
+            'purged_counts' => $purgedCounts
+        ]);
     }
 }
