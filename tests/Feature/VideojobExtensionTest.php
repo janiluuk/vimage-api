@@ -40,6 +40,8 @@ class VideojobExtensionTest extends TestCase
             'fps' => 24,
             'frame_count' => 100,
             'length' => 4,
+            'width' => 512,
+            'height' => 512,
             'generation_parameters' => json_encode([
                 'model_id' => 1,
                 'prompts' => [
@@ -95,6 +97,8 @@ class VideojobExtensionTest extends TestCase
         $this->assertEquals('processing', $extendJob->status);
         $this->assertEquals($baseJob->model_id, $extendJob->model_id);
         $this->assertEquals($baseJob->fps, $extendJob->fps);
+        $this->assertEquals($baseJob->width, $extendJob->width);
+        $this->assertEquals($baseJob->height, $extendJob->height);
     }
 
     /**
@@ -182,12 +186,16 @@ class VideojobExtensionTest extends TestCase
             'user_id' => $this->user->id,
             'generator' => 'deforum',
             'status' => 'finished',
+            'width' => 512,
+            'height' => 512,
         ]);
 
         // Create a new job to be extended
         $extendJob = Videojob::factory()->create([
             'user_id' => $this->user->id,
             'status' => 'pending',
+            'width' => 512,
+            'height' => 512,
         ]);
 
         // Try to extend with vid2vid (should fail)
@@ -219,6 +227,8 @@ class VideojobExtensionTest extends TestCase
             'user_id' => $this->user->id,
             'generator' => null,
             'status' => 'finished',
+            'width' => 512,
+            'height' => 512,
         ]);
 
         // Create a new job to be extended
@@ -226,6 +236,8 @@ class VideojobExtensionTest extends TestCase
             'user_id' => $this->user->id,
             'generator' => 'deforum',
             'status' => 'pending',
+            'width' => 512,
+            'height' => 512,
         ]);
 
         // Try to extend with deforum (should fail)
@@ -259,6 +271,8 @@ class VideojobExtensionTest extends TestCase
             'user_id' => $otherUser->id,
             'generator' => 'deforum',
             'status' => 'finished',
+            'width' => 512,
+            'height' => 512,
         ]);
 
         // Create a new job to be extended
@@ -266,6 +280,8 @@ class VideojobExtensionTest extends TestCase
             'user_id' => $this->user->id,
             'generator' => 'deforum',
             'status' => 'pending',
+            'width' => 512,
+            'height' => 512,
         ]);
 
         // Try to extend with another user's job (should fail)
