@@ -22,6 +22,8 @@ class VideojobExtensionTest extends TestCase
     {
         parent::setUp();
 
+        $this->withoutMiddleware();
+
         $this->user = User::factory()->create();
     }
 
