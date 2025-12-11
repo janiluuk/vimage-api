@@ -61,7 +61,7 @@ class VideojobApiEndpointsTest extends TestCase
     {
         Queue::fake();
         Carbon::setTestNow('2024-02-02 10:00:00');
-        putenv('LOW_PRIORITY_QUEUE=slow');
+        config(['queue.names.LOW_PRIORITY_QUEUE' => 'slow']);
 
         $videoJob = Videojob::factory()->for(User::factory(), 'user')->create([
             'status' => Videojob::STATUS_PENDING,
@@ -93,7 +93,7 @@ class VideojobApiEndpointsTest extends TestCase
     public function test_finalize_deforum_dispatches_low_priority_queue(): void
     {
         Queue::fake();
-        putenv('LOW_PRIORITY_QUEUE=background');
+        config(['queue.names.LOW_PRIORITY_QUEUE' => 'background']);
 
         $videoJob = Videojob::factory()->for(User::factory(), 'user')->create([
             'generator' => 'deforum',

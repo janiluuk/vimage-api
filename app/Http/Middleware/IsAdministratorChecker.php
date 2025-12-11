@@ -12,7 +12,13 @@ class IsAdministratorChecker
 {
     public function handle(Request $request, Closure $next)
     {
-        $authUserRole = Auth::user()->userRole->getType();
+        $user = Auth::user();
+        
+        if (!$user || !$user->userRole) {
+            throw new AccessDeniedException();
+        }
+
+        $authUserRole = $user->userRole->getType();
 
         if ($authUserRole !== UserRoleConstant::ADMINISTRATOR &&
             $authUserRole !== UserRoleConstant::SUPER_ADMINISTRATOR) {

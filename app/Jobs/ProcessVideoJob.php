@@ -63,16 +63,21 @@ class ProcessVideoJob implements ShouldQueue, ShouldBeUnique
         if ($this->videoJob) {
             $videoJob = $this->videoJob;
             try {
-                $pids = false;
-                Log::info("Starting...");
+                Log::info("Starting video job processing", ['job_id' => $videoJob->id]);
 
-                exec('ps aux | grep -i video2video | grep -i \"\-\-jobid=' . $videoJob->id . '\" | grep -v grep', $pids);
-                if (!empty($pids) && $videoJob->status == Videojob::STATUS_PROCESSING && $this->previewFrames == 0) {
+                // Check for existing processing using cache instead of exec for better performance and security
+                $lockKey = $this->getProcessingLockKey($videoJob->id);
+                $isLocked = \Cache::has($lockKey);
+                
+                if ($isLocked && $videoJob->status == Videojob::STATUS_PROCESSING && $this->previewFrames == 0) {
                     $videoJob->status = VideoJob::STATUS_APPROVED;
                     $videoJob->save();
-                    Log::info("Found existing process, aborting..");
+                    Log::info("Job is already being processed, aborting", ['job_id' => $videoJob->id]);
                     return;
                 }
+
+                // Set lock for 30 minutes
+                \Cache::put($lockKey, true, now()->addMinutes(30));
 
                 $videoJob->resetProgress(Videojob::STATUS_PROCESSING);
                 $videoJob->job_time = time() - $start_time;
@@ -83,26 +88,51 @@ class ProcessVideoJob implements ShouldQueue, ShouldBeUnique
                 $targetFile = implode("/", [config('app.paths.processed'), $videoJob->outfile]);
                 $targetUrl = config('app.url') . '/processed/' . $videoJob->outfile;
 
-                Log::info("Starting " . ($this->previewFrames ? " frames PREVIEW " : "") . "conversion for {$videoJob->filename} to {$targetFile} URL: ($targetUrl} ");
+                Log::info("Starting conversion", [
+                    'job_id' => $videoJob->id,
+                    'preview_frames' => $this->previewFrames,
+                    'target_file' => $targetFile,
+                ]);
 
                 $service->startProcess($videoJob, $this->previewFrames);
 
+                // Release lock on successful completion
+                \Cache::forget($this->getProcessingLockKey($videoJob->id));
 
-                Log::info('WTF converted {url} in {duration}', ['url' => $videoJob->url, 'duration' => $videoJob->job_time]);
+                Log::info('Video conversion completed', [
+                    'job_id' => $videoJob->id,
+                    'url' => $videoJob->url,
+                    'duration' => $videoJob->job_time
+                ]);
 
             } catch (\Exception $e) {
-                Log::info('Error while converting a video job: {error} ', ['error' => $e->getMessage(), 'retries' => $videoJob->retries]);
+                // Release lock on error
+                \Cache::forget($this->getProcessingLockKey($videoJob->id));
+                
+                Log::error('Error while converting video job', [
+                    'job_id' => $videoJob->id,
+                    'error' => $e->getMessage(),
+                    'retries' => $videoJob->retries
+                ]);
 
                 $videoJob->job_time = time() - $start_time;
                 $this->videoJob = $videoJob;
                 $this->videoJob->queued_at = \Carbon\Carbon::now();
-                $this->videoJob->retries+=1;
+                $this->videoJob->retries += 1;
                 $this->videoJob->save();
                 throw $e;
             }
-
         }
     }
+
+    /**
+     * Get the cache key for processing lock
+     */
+    private function getProcessingLockKey(int $jobId): string
+    {
+        return "video_job_processing_{$jobId}";
+    }
+
     public function retryUntil(): DateTimeInterface
     {
        return now()->addDay();

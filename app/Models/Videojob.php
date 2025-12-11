@@ -478,15 +478,22 @@ class Videojob extends Model implements HasMedia
         if ($this->status !== self::STATUS_APPROVED) {
             return [];
         }
-        $jobId = $this->id;
+
         $info = [];
-
-        // Amount of items in the queue
-        $info['total_jobs_processing'] = DB::table('video_jobs')->where('status', 'processing')->count();
-        $info['total_jobs_in_queue'] = DB::table('video_jobs')->where('status', 'approved')->count();
-
-        $modelId = $this->model_id;
         $queuedAt = $this->queued_at ?? now()->timestamp;
+
+        // Optimize: Single query to get both counts
+        $counts = DB::table('video_jobs')
+            ->selectRaw('
+                SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as processing,
+                SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as approved
+            ', ['processing', 'approved'])
+            ->first();
+
+        $info['total_jobs_processing'] = $counts->processing ?? 0;
+        $info['total_jobs_in_queue'] = $counts->approved ?? 0;
+
+        // Calculate position in queue
         $info['your_position'] = DB::table('video_jobs')
             ->where('status', 'approved')
             ->where(function ($query) use ($queuedAt) {
@@ -498,47 +505,42 @@ class Videojob extends Model implements HasMedia
             })
             ->count();
 
-        // Calculate the average time per frame for previous jobs with the same model
-        $previousJobs = DB::table('video_jobs')
-            ->where('model_id', $modelId)
+        // Optimize: Calculate average time in single query with aggregation
+        $avgStats = DB::table('video_jobs')
+            ->where('model_id', $this->model_id)
             ->where('status', 'finished')
-            ->get();
+            ->where('job_time', '>', 0)
+            ->where('frame_count', '>', 0)
+            ->selectRaw('SUM(job_time) as total_time, SUM(frame_count) as total_frames')
+            ->first();
 
-        if ($previousJobs->isEmpty()) {
-            $info['your_estimated_time'] = round($this->frame_count * 10);
-        }
+        $totalTime = $avgStats->total_time ?? 0;
+        $totalFrames = $avgStats->total_frames ?? 0;
 
-        $totalTime = 0;
-        $totalFrames = 0;
-
-        foreach ($previousJobs as $job) {
-            if ($job->job_time == 0 || $job->frame_count == 0)
-                continue;
-            $totalTime += $job->job_time;
-            $totalFrames += $job->frame_count;
-        }
+        // Calculate average time per frame
         if ($totalTime == 0 || $totalFrames == 0) {
             $averageTimePerFrame = 10;
         } else {
             $averageTimePerFrame = round($totalTime / $totalFrames);
         }
-        // Estimated time for all jobs in the queue
-        $totalFramesInQueue = DB::table('video_jobs')
-            ->where('model_id', $modelId)
-            ->where('status', self::STATUS_APPROVED)
-            ->sum('frame_count');
 
-        $currentJobsEstimate = DB::table('video_jobs')
-            ->where('status', self::STATUS_PROCESSING)
-            ->sum('estimated_time_left');
+        // Calculate estimated time for this job
+        $info['your_estimated_time'] = round($averageTimePerFrame * $this->frame_count);
+
+        // Optimize: Get queue stats and processing estimate in single query
+        $queueStats = DB::table('video_jobs')
+            ->selectRaw('
+                SUM(CASE WHEN status = ? AND model_id = ? THEN frame_count ELSE 0 END) as queue_frames,
+                SUM(CASE WHEN status = ? THEN estimated_time_left ELSE 0 END) as processing_time
+            ', [self::STATUS_APPROVED, $this->model_id, self::STATUS_PROCESSING])
+            ->first();
+
+        $totalFramesInQueue = $queueStats->queue_frames ?? 0;
+        $currentJobsEstimate = $queueStats->processing_time ?? 0;
 
         if ($totalFramesInQueue > 0) {
             $info['estimated_time_for_all_jobs'] = round($currentJobsEstimate + ($averageTimePerFrame * $totalFramesInQueue));
         }
-        // Estimated time for your job
-        $info['your_estimated_time'] = round($averageTimePerFrame * $this->frame_count);
-        // Estimated time for all jobs in the queue
-
 
         $info['estimated_time_processing_jobs'] = $currentJobsEstimate;
 

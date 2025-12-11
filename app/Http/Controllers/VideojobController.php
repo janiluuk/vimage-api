@@ -83,8 +83,8 @@ class VideojobController extends Controller
         $videoJob->seed = -1;
         $videoJob->frame_count = 90;
         $videoJob->user_id = auth('api')->id();
-        $videoJob->prompt = 'skull face, Halloween, (sharp teeth:1.4), (mouth open:1.3), (dark skin:1.2), scull, night, dim light, darkness, looking to the viewer, eyes looking straight,  <lora:LowRA:0.3> <lora:more_details:0.5>';
-        $videoJob->negative_prompt = 'bad-picture-chill-75v';
+        $videoJob->prompt = '';
+        $videoJob->negative_prompt = '';
         $videoJob->status = 'pending';
 
         $this->attachSoundtrack($videoJob, $request);
@@ -102,13 +102,13 @@ class VideojobController extends Controller
     
     public function generate(Request $request): JsonResponse
     {
-        $type = $request->input('type', 'vid2vid');
+        // Validate common parameters first
+        $request->validate([
+            'videoId' => 'required|integer|exists:video_jobs,id',
+            'type' => 'required|in:vid2vid,deforum',
+        ]);
 
-        if (!in_array($type, ['vid2vid', 'deforum'], true)) {
-            return response()->json([
-                'message' => 'Unsupported generation type.',
-            ], 422);
-        }
+        $type = $request->input('type');
 
         return $type === 'deforum'
             ? $this->generateDeforum($request)
@@ -148,6 +148,7 @@ private function generateDeforum(Request $request): JsonResponse
 
             $persistedParameters = json_decode((string) $baseJob->generation_parameters, true) ?? [];
 
+            // Set defaults from base job (these will be overridden if provided in request)
             $videoJob->model_id = $persistedParameters['model_id'] ?? $baseJob->model_id;
             $videoJob->prompt = $persistedParameters['prompts']['positive'] ?? $baseJob->prompt;
             $videoJob->negative_prompt = $persistedParameters['prompts']['negative'] ?? $baseJob->negative_prompt;
@@ -162,7 +163,11 @@ private function generateDeforum(Request $request): JsonResponse
             return $response;
         }
 
-        $videoJob->model_id = $request->input('modelId', $videoJob->model_id);
+        // When extending, keep base job's model_id; otherwise use request value
+        if (!$extendFromJobId) {
+            $videoJob->model_id = $request->input('modelId', $videoJob->model_id);
+        }
+        // else: extending - keep the model_id from base job (already set above at line 152)
         $videoJob->prompt = trim((string) $request->input('prompt', $videoJob->prompt));
         $videoJob->negative_prompt = trim((string) $request->input('negative_prompt', $videoJob->negative_prompt));
         $videoJob->status = 'processing';
@@ -212,6 +217,9 @@ private function generateDeforum(Request $request): JsonResponse
             'prompt' => 'required|string',
             'frameCount' => 'numeric|between:1,20',
             'denoising' => 'required|numeric|between:0.1,1.0',
+            'seed' => 'nullable|integer',
+            'negative_prompt' => 'nullable|string',
+            'controlnet' => 'nullable|array',
         ]);
 
         $seed = $this->normalizeSeed((int) $request->input('seed', -1));
@@ -312,13 +320,13 @@ private function generateDeforum(Request $request): JsonResponse
     ]);
 }
 
-public function cancelJob(Request $request): JsonResponse
+public function cancelJob(int $videoId): JsonResponse
     {
         if ($response = $this->guardAuthenticated()) {
             return $response;
         }
 
-        $videoJob = Videojob::findOrFail($request->input('videoId'));
+        $videoJob = Videojob::findOrFail($videoId);
 
         if ($response = $this->assertOwner($videoJob)) {
             return $response;
@@ -526,7 +534,9 @@ public function cancelJob(Request $request): JsonResponse
 
     private function resolveQueueName(string $envKey, string $default): string
     {
-        $queue = env($envKey);
+        // Note: Queue names should be defined in config/queue.php for proper config caching
+        // For now, using env() with a fallback. Consider moving to config file.
+        $queue = config("queue.names.{$envKey}", env($envKey));
 
         return ! empty($queue) ? $queue : $default;
     }
