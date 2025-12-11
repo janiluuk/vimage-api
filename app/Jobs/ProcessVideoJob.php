@@ -48,16 +48,22 @@ class ProcessVideoJob implements ShouldQueue, ShouldBeUnique
             ->where('updated_at', '<', now()->subMinutes(15))
             ->update(['status' => 'error']);
 
-
+        // Check concurrent job limit
+        $maxConcurrentJobs = config('app.video_processing.max_concurrent_jobs', 1);
         $processingJobs = Videojob::where('status', VideoJob::STATUS_PROCESSING)->count();
 
-        if ($this->previewFrames == 0 && $processingJobs > 0) {
+        if ($this->previewFrames == 0 && $maxConcurrentJobs > 0 && $processingJobs >= $maxConcurrentJobs) {
             if ($this->videoJob && $this->videoJob->status == VideoJob::STATUS_PROCESSING) {
                 $this->videoJob->status = VideoJob::STATUS_APPROVED;
                 $this->videoJob->save();
             }
-            Log::info("Found existing process, aborting..");
+            Log::info("Maximum concurrent jobs reached, requeueing", [
+                'current_jobs' => $processingJobs,
+                'max_allowed' => $maxConcurrentJobs
+            ]);
 
+            // Release with shorter delay for better responsiveness
+            $this->release(10);
             return;
         }
         if ($this->videoJob) {

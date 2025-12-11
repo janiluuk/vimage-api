@@ -28,6 +28,12 @@ Laravel 10 API that powers video production, AI studio experiences, and GPU reso
 - **Queue management**: Priority-based job queuing (high/medium/low)
 - **Real-time progress tracking**: Monitor job status, progress, and estimated completion time
 - **Job lifecycle control**: Upload → Generate → Finalize → Process flow
+- **Advanced encoding system**: (See [VIDEO_ENCODING_IMPROVEMENTS.md](VIDEO_ENCODING_IMPROVEMENTS.md))
+  - File system watching for automatic output detection
+  - Async processing with real-time progress updates
+  - Configurable concurrent job processing
+  - Encoding progress parser for multiple formats
+  - Better error recovery and robustness
 
 ### 💰 GPU Credits & E-commerce
 - **Product catalog**: Categories and GPU credit packages
@@ -220,6 +226,14 @@ All administration endpoints require authentication and administrator role. Base
 - **Generate API docs** (Scribe): `php artisan scribe:generate`
 - **Clear logs**: `php artisan log:clear`
 - **Code formatting** (Pint): `./vendor/bin/pint`
+- **Watch video output**: `php artisan video:watch-output` — Monitor encoding output directories
+
+### Video Processing Commands
+
+- **Start file watcher daemon**: `php artisan video:watch-output --interval=5`
+  - Monitors output directories for completed video encodings
+  - Automatically updates job statuses
+  - Run as a background service for production
 
 Xdebug is available in the Docker environment; point your IDE to the running container and use `php artisan tinker` for quick
 REPL-style checks.

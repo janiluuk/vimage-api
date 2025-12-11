@@ -167,6 +167,26 @@ return [
         'default_prompt_suffix' => 'masterpiece, best quality, 8k',
         'default_negative_prompt_suffix' => 'blurry, worst quality, low quality, bad anatomy, ugly, missing arms, bad proportions, tiling, missing legs',
     ],
+    
+    'video_processing' => [
+        // Enable async processing with real-time progress tracking
+        'use_async' => env('VIDEO_PROCESSING_ASYNC', false),
+        
+        // Enable file system watching for output detection
+        'use_file_watcher' => env('VIDEO_PROCESSING_FILE_WATCHER', false),
+        
+        // File watcher polling interval in seconds
+        'file_watcher_interval' => env('VIDEO_PROCESSING_WATCHER_INTERVAL', 5),
+        
+        // Maximum number of concurrent encoding jobs (0 = unlimited)
+        'max_concurrent_jobs' => env('VIDEO_PROCESSING_MAX_CONCURRENT', 1),
+        
+        // Progress update throttle (minimum percentage change to trigger update)
+        'progress_update_threshold' => env('VIDEO_PROCESSING_PROGRESS_THRESHOLD', 1.0),
+        
+        // Enable incremental progress updates during encoding
+        'track_progress' => env('VIDEO_PROCESSING_TRACK_PROGRESS', true),
+    ],
     'providers' => [
 
         /*

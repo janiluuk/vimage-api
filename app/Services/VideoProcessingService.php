@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\ModelFile;
 use App\Models\Videojob;
+use App\Services\VideoJobs\AsyncVideoProcessor;
+use App\Services\VideoJobs\EncodingProgressParser;
 use FFMpeg\FFProbe;
 use FFMpeg\Format\Video\X264;
 use FFMpeg\FFMpeg as FFMpegOg;
@@ -196,6 +198,15 @@ class VideoProcessingService
             $cmd = $this->buildCommandLine($videoJob, $videoJob->getOriginalVideoPath(), $videoJob->getFinishedVideoPath(), $previewFrames);
             $this->killProcess($videoJob->id);
             Log::info("Conversion {$videoJob->id}: Running {$cmd}");
+            
+            // Use async processor with progress tracking if enabled
+            $useAsyncProcessing = config('app.video_processing.use_async', false);
+            
+            if ($useAsyncProcessing && $videoJob->frame_count > 0) {
+                return $this->processWithAsyncTracking($videoJob, $cmd, $isPreview);
+            }
+            
+            // Fallback to synchronous processing
             $process = Process::fromShellCommandline($cmd);
             $process->setTimeout(7200);
             try {
@@ -239,6 +250,55 @@ class VideoProcessingService
             $videoJob->resetProgress('error');
             $videoJob->save();
             throw new \Exception($e->getMessage());
+        }
+    }
+
+    /**
+     * Process video with async progress tracking
+     */
+    private function processWithAsyncTracking(Videojob $videoJob, string $cmd, bool $isPreview)
+    {
+        Log::info("Using async processing with progress tracking", ['job_id' => $videoJob->id]);
+        
+        try {
+            $progressParser = new EncodingProgressParser($videoJob->frame_count);
+            $asyncProcessor = new AsyncVideoProcessor(null, $progressParser);
+            
+            $success = $asyncProcessor->process($videoJob, $cmd, 7200);
+            
+            if ($success) {
+                $videoJob->refresh();
+
+                if ($videoJob->frame_count == 0) {
+                    $videoJob->frame_count++;
+                }
+
+                if (!$isPreview && !empty($videoJob->soundtrack_path)) {
+                    $this->mergeSoundtrack($videoJob);
+                }
+
+                $videoJob->attachResults();
+                $videoJob->save();
+                $videoJob->refresh();
+
+                Log::info("Paths: ", [
+                    'preview' => $videoJob->getMediaFilesForRevision('image'), 
+                    'animation' => $videoJob->getMediaFilesForRevision('animation'), 
+                    'finished_video' => $videoJob->getMediaFilesForRevision('video', 'finished')
+                ]);
+                
+                $videoJob->status = ($isPreview) ? 'preview' : 'finished';
+                $videoJob->save();
+            }
+            
+            return $success;
+            
+        } catch (\Exception $e) {
+            Log::error('Async processing error', [
+                'job_id' => $videoJob->id,
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
         }
     }
     private function buildPreviewParameters(Videojob $videoJob, $previewFrames = 0): array
