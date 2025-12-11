@@ -7,7 +7,7 @@ services:
         uid: ${UID}
       context: ./
       dockerfile: Dockerfile
-    image: vimage-backend
+    image: mage-backend
     container_name: laravel-api
     restart: unless-stopped
     working_dir: /var/www/

@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Video-to-video transformation pipeline for Codename Vimage.
+"""Video-to-video transformation pipeline for Codename Mage.
 
 The script orchestrates frame extraction, Stable Diffusion processing, progress
 tracking, and output assembly. It intentionally keeps heavy operations minimal
@@ -37,7 +37,7 @@ DB_CONFIG = {
     "user": "laravel",
     "password": "zxcvfdsA",
     "host": "webtop.local",
-    "database": "vimage",
+    "database": "mage",
 }
 
 options = {
@@ -589,7 +589,7 @@ class VideoProcessor:
 # Parse arguments
 
 parser = argparse.ArgumentParser(
-    description='Videoprocessor for Codename Vimage')
+    description='Videoprocessor for Codename Mage')
 parser.add_argument('path', type=str,
                     help='the path to the video file')
 parser.add_argument('--unit1_params', type=str, help='Parameters for Controlnet unit 1 in the format "--unit1_params=\'module=hed, model=control_v11p_sd15_softedge [a8575a2a], weight=1.0, lowvram=false, pixel_perfect=true, loopback=True\'"')

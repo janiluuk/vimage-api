@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Vimage
+  title: Mage AI Studio API
   description: ''
   version: 1.0.0
 servers:

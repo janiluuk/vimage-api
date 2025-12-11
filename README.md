@@ -1,4 +1,4 @@
-# Vimage Backend API
+# Mage AI Studio API Backend API
 
 Laravel 10 API that powers uploads, video production, AI studio experiences for remixing existing or newly generated material, and GPU resource credit workflows for the clients.
 

@@ -16,7 +16,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Vimage'),
+    'name' => env('APP_NAME', 'Mage AI Studio API'),
 
     /*
     |--------------------------------------------------------------------------

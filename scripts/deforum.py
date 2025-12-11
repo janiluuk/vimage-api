@@ -252,7 +252,7 @@ class DeforumController:
                 
         exit(0)
 # Main execution of the DeforumController
-parser = argparse.ArgumentParser(description="Deforum controller for codename Vimage")
+parser = argparse.ArgumentParser(description="Deforum controller for codename Mage")
 parser.add_argument('--prompts', type=str, help="Prompts in the format 'keyframe:prompt;keyframe:prompt;...'")
 parser.add_argument('--host', type=str, help="Hostname to connect to")
 parser.add_argument('--port', type=int, default=7860, help="Port to connect to")
