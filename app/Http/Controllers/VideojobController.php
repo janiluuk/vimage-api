@@ -358,12 +358,12 @@ private function generateDeforum(Request $request): JsonResponse
         $videoJob->save();
 
         $videoJob->refresh();
-        ProcessDeforumJob::dispatch($videoJob, 0)->onQueue($this->resolveQueueName('LOW_PRIORITY_QUEUE', 'low'));
+        ProcessDeforumJob::dispatch($videoJob, 0, null)->onQueue($this->resolveQueueName('LOW_PRIORITY_QUEUE', 'low'));
     } else {
         $videoJob->resetProgress('approved');
 
         $videoJob->refresh();
-        ProcessVideoJob::dispatch($videoJob, 0)->onQueue($this->resolveQueueName('LOW_PRIORITY_QUEUE', 'low'));
+        ProcessVideoJob::dispatch($videoJob, 0, null)->onQueue($this->resolveQueueName('LOW_PRIORITY_QUEUE', 'low'));
     }
 
     return response()->json([

@@ -27,8 +27,9 @@ class VideoStitcherTest extends TestCase
 
     private function hasFFmpeg(): bool
     {
-        exec('which ffmpeg', $output, $returnCode);
-        return $returnCode === 0;
+        $process = new \Symfony\Component\Process\Process(['which', 'ffmpeg']);
+        $process->run();
+        return $process->isSuccessful();
     }
 
     /**
